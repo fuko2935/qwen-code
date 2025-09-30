@@ -16,12 +16,14 @@ interface HeaderProps {
   customAsciiArt?: string; // For user-defined ASCII art
   version: string;
   nightly: boolean;
+  bmadMode?: string;
 }
 
 export const Header: React.FC<HeaderProps> = ({
   customAsciiArt,
   version,
   nightly,
+  bmadMode,
 }) => {
   const { columns: terminalWidth } = useTerminalSize();
   let displayTitle;
@@ -63,6 +65,11 @@ export const Header: React.FC<HeaderProps> = ({
           ) : (
             <Text>v{version}</Text>
           )}
+        </Box>
+      )}
+      {bmadMode === 'bmad-expert' && (
+        <Box width="100%" flexDirection="row" justifyContent="flex-end" marginTop={1}>
+          <Text color={Colors.AccentYellow}>★ BMAD Expert Mode</Text>
         </Box>
       )}
     </Box>

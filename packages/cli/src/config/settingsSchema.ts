@@ -675,6 +675,54 @@ export const SETTINGS_SCHEMA = {
     },
   },
 
+  bmad: {
+    type: 'object',
+    label: 'BMAD',
+    category: 'BMAD',
+    requiresRestart: true,
+    default: {},
+    description: 'BMAD Method integration settings.',
+    showInDialog: false,
+    properties: {
+      mode: {
+        type: 'string',
+        label: 'BMAD Mode',
+        category: 'BMAD',
+        requiresRestart: true,
+        default: 'normal' as 'normal' | 'bmad-expert',
+        description: 'Agent mode: normal (standard Qwen) or bmad-expert (BMAD Orchestrator)',
+        showInDialog: true,
+      },
+      autoResume: {
+        type: 'boolean',
+        label: 'Auto Resume Workflow',
+        category: 'BMAD',
+        requiresRestart: false,
+        default: true,
+        description: 'Automatically resume interrupted BMAD workflows on startup',
+        showInDialog: true,
+      },
+      maxRetries: {
+        type: 'number',
+        label: 'Max Retries',
+        category: 'BMAD',
+        requiresRestart: false,
+        default: 3,
+        description: 'Maximum retry attempts for failed workflow steps',
+        showInDialog: true,
+      },
+      tokenBudget: {
+        type: 'number',
+        label: 'Token Budget',
+        category: 'BMAD',
+        requiresRestart: false,
+        default: 100000,
+        description: 'Token budget for BMAD context management',
+        showInDialog: true,
+      },
+    },
+  },
+
   advanced: {
     type: 'object',
     label: 'Advanced',
@@ -910,6 +958,16 @@ export const SETTINGS_SCHEMA = {
     default: true,
     description:
       'Show welcome back dialog when returning to a project with conversation history.',
+    showInDialog: true,
+  },
+  bmadMode: {
+    type: 'string',
+    label: 'BMAD Mode',
+    category: 'General',
+    requiresRestart: false,
+    default: 'normal',
+    description:
+      'Operating mode: "normal" for standard Qwen Code, "bmad-expert" for BMAD Expert Mode with autonomous workflow management.',
     showInDialog: true,
   },
 } as const;

@@ -30,7 +30,9 @@ vi.mock('../ui/commands/restoreCommand.js', () => ({
 
 import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { BuiltinCommandLoader } from './BuiltinCommandLoader.js';
+import { initializeBmadCommands } from '../ui/commands/bmad/index.js';
 import type { Config } from '@qwen-code/qwen-code-core';
+import type { LoadedSettings } from '../config/settings.js';
 import { CommandKind } from '../ui/commands/types.js';
 
 import { ideCommand } from '../ui/commands/ideCommand.js';
@@ -71,16 +73,33 @@ vi.mock('../ui/commands/modelCommand.js', () => ({
     kind: 'BUILT_IN',
   },
 }));
+vi.mock('../ui/commands/bmad/index.js', () => ({
+  bmadCommands: [],
+  initializeBmadCommands: vi.fn().mockResolvedValue(undefined),
+}));
+
 
 describe('BuiltinCommandLoader', () => {
   let mockConfig: Config;
 
+  let mockSettings: LoadedSettings;
+  const projectRoot = '/workspace/project';
+
   const ideCommandMock = ideCommand as Mock;
   const restoreCommandMock = restoreCommand as Mock;
+  const initializeBmadCommandsMock = initializeBmadCommands as Mock;
 
   beforeEach(() => {
     vi.clearAllMocks();
-    mockConfig = { some: 'config' } as unknown as Config;
+    mockConfig = {
+      getProjectRoot: vi.fn(() => projectRoot),
+    } as unknown as Config;
+    mockSettings = {
+      merged: { bmadMode: 'bmad-expert' },
+    } as unknown as LoadedSettings;
+
+    initializeBmadCommandsMock.mockClear();
+    initializeBmadCommandsMock.mockResolvedValue(undefined);
 
     ideCommandMock.mockReturnValue({
       name: 'ide',
@@ -95,8 +114,15 @@ describe('BuiltinCommandLoader', () => {
   });
 
   it('should correctly pass the config object to command factory functions', async () => {
-    const loader = new BuiltinCommandLoader(mockConfig);
+    const loader = new BuiltinCommandLoader(mockConfig, mockSettings);
     await loader.loadCommands(new AbortController().signal);
+
+    expect(initializeBmadCommandsMock).toHaveBeenCalledTimes(1);
+    expect(initializeBmadCommandsMock).toHaveBeenCalledWith(
+      projectRoot,
+      mockConfig,
+      'bmad-expert',
+    );
 
     expect(ideCommandMock).toHaveBeenCalledTimes(1);
     expect(ideCommandMock).toHaveBeenCalledWith(mockConfig);
@@ -107,7 +133,7 @@ describe('BuiltinCommandLoader', () => {
   it('should filter out null command definitions returned by factories', async () => {
     // Override the mock's behavior for this specific test.
     ideCommandMock.mockReturnValue(null);
-    const loader = new BuiltinCommandLoader(mockConfig);
+    const loader = new BuiltinCommandLoader(mockConfig, mockSettings);
     const commands = await loader.loadCommands(new AbortController().signal);
 
     // The 'ide' command should be filtered out.
@@ -120,8 +146,9 @@ describe('BuiltinCommandLoader', () => {
   });
 
   it('should handle a null config gracefully when calling factories', async () => {
-    const loader = new BuiltinCommandLoader(null);
+    const loader = new BuiltinCommandLoader(null, undefined);
     await loader.loadCommands(new AbortController().signal);
+    expect(initializeBmadCommandsMock).not.toHaveBeenCalled();
     expect(ideCommandMock).toHaveBeenCalledTimes(1);
     expect(ideCommandMock).toHaveBeenCalledWith(null);
     expect(restoreCommandMock).toHaveBeenCalledTimes(1);
@@ -129,7 +156,7 @@ describe('BuiltinCommandLoader', () => {
   });
 
   it('should return a list of all loaded commands', async () => {
-    const loader = new BuiltinCommandLoader(mockConfig);
+    const loader = new BuiltinCommandLoader(mockConfig, mockSettings);
     const commands = await loader.loadCommands(new AbortController().signal);
 
     const aboutCmd = commands.find((c) => c.name === 'about');

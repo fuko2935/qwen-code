@@ -54,6 +54,7 @@ export const useSlashCommandProcessor = (
   openPrivacyNotice: () => void,
   openSettingsDialog: () => void,
   openModelSelectionDialog: () => void,
+  openModeSelectionDialog: () => void,
   openSubagentCreateDialog: () => void,
   openAgentsManagerDialog: () => void,
   toggleVimEnabled: () => Promise<boolean>,
@@ -251,7 +252,7 @@ export const useSlashCommandProcessor = (
     const load = async () => {
       const loaders = [
         new McpPromptLoader(config),
-        new BuiltinCommandLoader(config),
+        new BuiltinCommandLoader(config, settings),
         new FileCommandLoader(config),
       ];
       const commandService = await CommandService.create(
@@ -407,6 +408,9 @@ export const useSlashCommandProcessor = (
                       return { type: 'handled' };
                     case 'model':
                       openModelSelectionDialog();
+                      return { type: 'handled' };
+                    case 'mode':
+                      openModeSelectionDialog();
                       return { type: 'handled' };
                     case 'subagent_create':
                       openSubagentCreateDialog();
@@ -668,6 +672,7 @@ export const useSlashCommandProcessor = (
       setIsProcessing,
       setConfirmationRequest,
       openModelSelectionDialog,
+      openModeSelectionDialog,
       session.stats,
     ],
   );

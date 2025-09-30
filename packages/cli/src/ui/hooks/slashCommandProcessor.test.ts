@@ -107,6 +107,7 @@ describe('useSlashCommandProcessor', () => {
   const mockOpenThemeDialog = vi.fn();
   const mockOpenAuthDialog = vi.fn();
   const mockOpenModelSelectionDialog = vi.fn();
+  const mockOpenModeSelectionDialog = vi.fn();
   const mockSetQuittingMessages = vi.fn();
 
   const mockConfig = makeFakeConfig({});
@@ -115,7 +116,7 @@ describe('useSlashCommandProcessor', () => {
     removeStatusChangeListener: vi.fn(),
   } as unknown as IdeClient);
 
-  const mockSettings = {} as LoadedSettings;
+  const mockSettings = { merged: { bmadMode: 'normal' } } as unknown as LoadedSettings;
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -124,6 +125,7 @@ describe('useSlashCommandProcessor', () => {
     mockFileLoadCommands.mockResolvedValue([]);
     mockMcpLoadCommands.mockResolvedValue([]);
     mockOpenModelSelectionDialog.mockClear();
+    mockOpenModeSelectionDialog.mockClear();
   });
 
   const setupProcessorHook = (
@@ -153,6 +155,7 @@ describe('useSlashCommandProcessor', () => {
         vi.fn(), // openPrivacyNotice
         vi.fn(), // openSettingsDialog
         mockOpenModelSelectionDialog,
+        mockOpenModeSelectionDialog,
         vi.fn(), // openSubagentCreateDialog
         vi.fn(), // openAgentsManagerDialog
         vi.fn(), // toggleVimEnabled
@@ -168,7 +171,7 @@ describe('useSlashCommandProcessor', () => {
   describe('Initialization and Command Loading', () => {
     it('should initialize CommandService with all required loaders', () => {
       setupProcessorHook();
-      expect(BuiltinCommandLoader).toHaveBeenCalledWith(mockConfig);
+      expect(BuiltinCommandLoader).toHaveBeenCalledWith(mockConfig, mockSettings);
       expect(FileCommandLoader).toHaveBeenCalledWith(mockConfig);
       expect(McpPromptLoader).toHaveBeenCalledWith(mockConfig);
     });
@@ -924,6 +927,7 @@ describe('useSlashCommandProcessor', () => {
           vi.fn(), // openPrivacyNotice
           vi.fn(), // openSettingsDialog
           vi.fn(), // openModelSelectionDialog
+          vi.fn(), // openModeSelectionDialog
           vi.fn(), // openSubagentCreateDialog
           vi.fn(), // openAgentsManagerDialog
           vi.fn(), // toggleVimEnabled

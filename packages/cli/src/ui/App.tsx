@@ -29,6 +29,7 @@ import { useAuthCommand } from './hooks/useAuthCommand.js';
 import { useQwenAuth } from './hooks/useQwenAuth.js';
 import { useFolderTrust } from './hooks/useFolderTrust.js';
 import { useEditorSettings } from './hooks/useEditorSettings.js';
+import { useModeSelection } from './hooks/useModeSelection.js';
 import { useQuitConfirmation } from './hooks/useQuitConfirmation.js';
 import { useWelcomeBack } from './hooks/useWelcomeBack.js';
 import { useDialogClose } from './hooks/useDialogClose.js';
@@ -54,6 +55,7 @@ import { ShellConfirmationDialog } from './components/ShellConfirmationDialog.js
 import { QuitConfirmationDialog } from './components/QuitConfirmationDialog.js';
 import { RadioButtonSelect } from './components/shared/RadioButtonSelect.js';
 import { ModelSelectionDialog } from './components/ModelSelectionDialog.js';
+import { ModeSelectionDialog } from './components/ModeSelectionDialog.js';
 import {
   ModelSwitchDialog,
   type VisionSwitchOutcome,
@@ -421,6 +423,13 @@ const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
     exitEditorDialog,
   } = useEditorSettings(settings, setEditorError, addItem);
 
+  const {
+    isModeDialogOpen,
+    openModeDialog,
+    handleModeSelect,
+    closeModeDialog,
+  } = useModeSelection(settings, addItem);
+
   const toggleCorgiMode = useCallback(() => {
     setCorgiMode((prev) => !prev);
   }, []);
@@ -728,6 +737,7 @@ const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
     openPrivacyNotice,
     openSettingsDialog,
     handleModelSelectionOpen,
+    openModeDialog,
     openSubagentCreateDialog,
     openAgentsManagerDialog,
     toggleVimEnabled,
@@ -787,6 +797,35 @@ const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
     [pendingSlashCommandHistoryItems, pendingGeminiHistoryItems],
   );
 
+  // BMAD mode: Wrap submitQuery to route prompts to BMAD Orchestrator
+  const bmadEnabledSubmitQuery = useCallback(
+    (query: string) => {
+      const isBmadMode = (settings.merged.bmadMode as string) === 'bmad-expert';
+      
+      // If BMAD mode is active and this is NOT a slash command, route to orchestrator
+      if (isBmadMode && !query.trim().startsWith('/')) {
+        // Initialize BMAD on first use
+        const bmadInitMessage = `🎭 BMAD Expert Mode: Routing your request through the Orchestrator...\n`;
+        addItem(
+          {
+            type: MessageType.INFO,
+            text: bmadInitMessage,
+          },
+          Date.now(),
+        );
+        
+        // Prepend BMAD orchestrator context to the query
+        const bmadWrappedQuery = `[BMAD Orchestrator Mode Active]\n\nProject Request: ${query}\n\nPlease analyze this request and guide me through the BMAD workflow phases:\n1. Analysis (requirements & market research)\n2. Product (PRD & specifications)\n3. UX Design (UI/UX & front-end specs)\n4. Architecture (system design)\n5. Planning (backlog & stories)\n6. Development (implementation)\n7. QA (quality assurance)\n\nLet's start with the first appropriate phase.`;
+        
+        submitQuery(bmadWrappedQuery);
+      } else {
+        // Normal mode or slash command: pass through
+        submitQuery(query);
+      }
+    },
+    [settings.merged.bmadMode, submitQuery, addItem],
+  );
+
   // Welcome back functionality
   const {
     welcomeBackInfo,
@@ -794,7 +833,7 @@ const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
     welcomeBackChoice,
     handleWelcomeBackSelection,
     handleWelcomeBackClose,
-  } = useWelcomeBack(config, submitQuery, buffer, settings.merged);
+  } = useWelcomeBack(config, bmadEnabledSubmitQuery, buffer, settings.merged);
 
   // Dialog close functionality
   const { closeAnyOpenDialog } = useDialogClose({
@@ -805,6 +844,8 @@ const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
     selectedAuthType: settings.merged.security?.auth?.selectedType,
     isEditorDialogOpen,
     exitEditorDialog,
+    isModeDialogOpen,
+    closeModeDialog,
     isSettingsDialogOpen,
     closeSettingsDialog,
     isFolderTrustDialogOpen,
@@ -819,7 +860,7 @@ const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
   const { messageQueue, addMessage, clearQueue, getQueuedMessagesText } =
     useMessageQueue({
       streamingState,
-      submitQuery,
+      submitQuery: bmadEnabledSubmitQuery,
     });
 
   // Update the cancel handler with message queue support
@@ -1144,6 +1185,7 @@ const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
       !isAuthDialogOpen &&
       !isThemeDialogOpen &&
       !isEditorDialogOpen &&
+      !isModeDialogOpen &&
       !isModelSelectionDialogOpen &&
       !isVisionSwitchDialogOpen &&
       !isSubagentCreateDialogOpen &&
@@ -1162,6 +1204,7 @@ const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
     isAuthDialogOpen,
     isThemeDialogOpen,
     isEditorDialogOpen,
+    isModeDialogOpen,
     isSubagentCreateDialogOpen,
     showPrivacyNotice,
     showWelcomeBackDialog,
@@ -1219,7 +1262,7 @@ const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
             <Box flexDirection="column" key="header">
               {!(
                 settings.merged.ui?.hideBanner || config.getScreenReader()
-              ) && <Header version={version} nightly={nightly} />}
+              ) && <Header version={version} nightly={nightly} bmadMode={settings.merged.bmadMode} />}
               {!(settings.merged.ui?.hideTips || config.getScreenReader()) && (
                 <Tips config={config} />
               )}
@@ -1442,6 +1485,12 @@ const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
               currentModel={currentModel}
               onSelect={handleModelSelect}
               onCancel={handleModelSelectionClose}
+            />
+          ) : isModeDialogOpen ? (
+            <ModeSelectionDialog
+              currentMode={(settings.merged.bmadMode as 'normal' | 'bmad-expert') || 'normal'}
+              onSelect={handleModeSelect}
+              onCancel={closeModeDialog}
             />
           ) : isVisionSwitchDialogOpen ? (
             <ModelSwitchDialog onSelect={handleVisionSwitchSelect} />

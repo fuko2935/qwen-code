@@ -25,6 +25,10 @@ export interface DialogCloseOptions {
   isEditorDialogOpen: boolean;
   exitEditorDialog: () => void;
 
+  // Mode dialog
+  isModeDialogOpen: boolean;
+  closeModeDialog: () => void;
+
   // Settings dialog
   isSettingsDialogOpen: boolean;
   closeSettingsDialog: () => void;
@@ -74,6 +78,12 @@ export function useDialogClose(options: DialogCloseOptions) {
     if (options.isEditorDialogOpen) {
       // Mimic ESC behavior: call onExit() directly
       options.exitEditorDialog();
+      return true;
+    }
+
+    if (options.isModeDialogOpen) {
+      // Mimic ESC behavior: call closeModeDialog() directly
+      options.closeModeDialog();
       return true;
     }
 

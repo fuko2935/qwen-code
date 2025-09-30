@@ -7,6 +7,9 @@
 import type { ICommandLoader } from './types.js';
 import type { SlashCommand } from '../ui/commands/types.js';
 import type { Config } from '@qwen-code/qwen-code-core';
+import type { LoadedSettings } from '../config/settings.js';
+import { BMAD_CONFIG } from '../config/bmadConfig.js';
+import type { BmadMode } from '../config/bmadConfig.js';
 import { aboutCommand } from '../ui/commands/aboutCommand.js';
 import { agentsCommand } from '../ui/commands/agentsCommand.js';
 import { approvalModeCommand } from '../ui/commands/approvalModeCommand.js';
@@ -38,13 +41,65 @@ import { themeCommand } from '../ui/commands/themeCommand.js';
 import { toolsCommand } from '../ui/commands/toolsCommand.js';
 import { vimCommand } from '../ui/commands/vimCommand.js';
 import { setupGithubCommand } from '../ui/commands/setupGithubCommand.js';
+import { modeCommand } from '../ui/commands/modeCommand.js';
+import { bmadCommands, initializeBmadCommands } from '../ui/commands/bmad/index.js';
 
 /**
  * Loads the core, hard-coded slash commands that are an integral part
  * of the Gemini CLI application.
  */
 export class BuiltinCommandLoader implements ICommandLoader {
-  constructor(private config: Config | null) {}
+  private bmadInitialization: Promise<void> | null = null;
+  private lastInitializedMode: BmadMode | null = null;
+
+  constructor(
+    private config: Config | null,
+    private settings?: LoadedSettings | null,
+  ) {}
+
+  private resolveBmadMode(): BmadMode {
+    const mode = this.settings?.merged?.bmadMode;
+    return mode === 'bmad-expert' ? 'bmad-expert' : BMAD_CONFIG.DEFAULT_MODE;
+  }
+
+  private async ensureBmadInitialized(): Promise<void> {
+    if (!this.config) {
+      return;
+    }
+
+    const resolveProjectRoot =
+      typeof (this.config as { getProjectRoot?: () => string | undefined }).getProjectRoot ===
+      'function'
+        ? (this.config as { getProjectRoot: () => string | undefined }).getProjectRoot
+        : undefined;
+
+    const cwd = resolveProjectRoot?.();
+    if (!cwd) {
+      return;
+    }
+
+    const mode = this.resolveBmadMode();
+
+    const shouldReinitialize =
+      mode === 'bmad-expert' && this.lastInitializedMode !== 'bmad-expert';
+
+    if (
+      (!this.bmadInitialization || shouldReinitialize) &&
+      mode === 'bmad-expert'
+    ) {
+      this.bmadInitialization = initializeBmadCommands(cwd, this.config, mode).catch(
+        (error) => {
+          this.bmadInitialization = null;
+          throw error;
+        },
+      );
+    } else if (!this.bmadInitialization) {
+      this.bmadInitialization = Promise.resolve();
+    }
+
+    this.lastInitializedMode = mode;
+    await this.bmadInitialization;
+  }
 
   /**
    * Gathers all raw built-in command definitions, injects dependencies where
@@ -54,6 +109,8 @@ export class BuiltinCommandLoader implements ICommandLoader {
    * @returns A promise that resolves to an array of `SlashCommand` objects.
    */
   async loadCommands(_signal: AbortSignal): Promise<SlashCommand[]> {
+    await this.ensureBmadInitialized();
+
     const allDefinitions: Array<SlashCommand | null> = [
       aboutCommand,
       agentsCommand,
@@ -75,6 +132,7 @@ export class BuiltinCommandLoader implements ICommandLoader {
       mcpCommand,
       memoryCommand,
       modelCommand,
+      modeCommand,
       privacyCommand,
       quitCommand,
       quitConfirmCommand,
@@ -87,6 +145,8 @@ export class BuiltinCommandLoader implements ICommandLoader {
       vimCommand,
       setupGithubCommand,
       terminalSetupCommand,
+      // BMAD commands
+      ...bmadCommands,
     ];
 
     return allDefinitions.filter((cmd): cmd is SlashCommand => cmd !== null);
