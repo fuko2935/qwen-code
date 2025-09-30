@@ -34,6 +34,8 @@ export class BmadService {
   private readonly taskRunner: BmadTaskRunner;
   private readonly workflowExecutor: BmadWorkflowExecutor;
   private initialized = false;
+  // Global toggle to keep only orchestrator persona without subagent prompt injection
+  private static orchestratorOnly = true;
   private currentMode: BmadMode = BMAD_CONFIG.DEFAULT_MODE;
   private currentAgent: AgentDefinition | null = null;
 
@@ -113,7 +115,8 @@ export class BmadService {
    * Load and inject orchestrator persona into system prompt
    */
   async injectOrchestratorPersona(): Promise<string> {
-    const orchestrator = await this.agentLoader.loadAgent(AgentId.ORCHESTRATOR);
+    // Use loadAgent wrapper to benefit from built-in fallback when .bmad-core is missing
+    const orchestrator = await this.loadAgent(AgentId.ORCHESTRATOR);
     this.currentAgent = orchestrator;
 
     // Build system prompt from agent definition
@@ -125,9 +128,19 @@ export class BmadService {
    * Load a specific agent
    */
   async loadAgent(agentId: AgentId | string): Promise<AgentDefinition> {
-    const agent = await this.agentLoader.loadAgent(agentId);
-    this.currentAgent = agent;
-    return agent;
+    try {
+      const agent = await this.agentLoader.loadAgent(agentId as string);
+      this.currentAgent = agent;
+      return agent;
+    } catch (error) {
+      // Fallback: use built-in agent definitions when .bmad-core is not present
+      const fallback = this.buildBuiltInAgent(agentId as string);
+      if (!fallback) {
+        throw error;
+      }
+      this.currentAgent = fallback;
+      return fallback;
+    }
   }
 
   /**
@@ -338,6 +351,11 @@ export class BmadService {
     systemPrompt: string,
     agentName: string,
   ): Promise<void> {
+    // Respect orchestrator-only mode: avoid injecting subagent prompts into history
+    if (BmadService.orchestratorOnly) {
+      console.log('⚙️  Orchestrator-only mode: skipping subagent prompt injection');
+      return;
+    }
     try {
       // Get the client from config
       const client = this._config.getGeminiClient();
@@ -372,6 +390,125 @@ export class BmadService {
     } catch (error) {
       console.error(`❌ Failed to inject agent prompt: ${error}`);
     }
+  }
+
+  /**
+   * Build a minimal built-in agent definition when no files exist
+   */
+  private buildBuiltInAgent(agentId: string): AgentDefinition | null {
+    const map: Record<string, { name: string; title: string; role: string; focus: string; icon: string; principles: string[]; system: string; whenToUse: string }> = {
+      [AgentId.ORCHESTRATOR]: {
+        name: 'BMAD Orchestrator',
+        title: 'BMAD Orchestrator',
+        role: 'Autonomous project orchestrator coordinating BMAD workflow end-to-end.',
+        focus: 'Analyze requirements, plan, and coordinate specialized agents to deliver software.',
+        icon: '🎭',
+        principles: ['Plan before act', 'Delegate to specialists', 'Persist progress', 'Ensure quality'],
+        system: 'You are the BMAD Orchestrator. Coordinate the BMAD workflow (Analysis → Product → UX → Architecture → Planning → Story Creation → Development → QA). Decide which specialized agent to delegate to next. Keep concise logs and persist session state.',
+        whenToUse: 'Use when initiating or coordinating an end-to-end project workflow, delegating to specialist agents as needed.'
+      },
+      [AgentId.ANALYST]: {
+        name: 'Business Analyst',
+        title: 'Business Analyst',
+        role: 'Elicit and clarify business requirements.',
+        focus: 'Market analysis, user personas, problem framing, success metrics.',
+        icon: '📊',
+        principles: ['Clarify assumptions', 'Quantify impact', 'Document rationale'],
+        system: 'You are a Business Analyst. Elicit clear requirements, produce concise findings and acceptance criteria. Maintain traceability to goals and risks.',
+        whenToUse: 'Use to clarify requirements, analyze markets, and define user needs before product specification.'
+      },
+      [AgentId.PM]: {
+        name: 'Product Manager',
+        title: 'Product Manager',
+        role: 'Define product requirements and roadmap.',
+        focus: 'PRD creation, prioritization, success metrics.',
+        icon: '🧭',
+        principles: ['Value first', 'Prioritize ruthlessly', 'Communicate clearly'],
+        system: 'You are a Product Manager. Produce PRD sections with scope, personas, requirements, and success metrics.',
+        whenToUse: 'Use to draft or refine PRDs, prioritize features, and define measurable success criteria.'
+      },
+      [AgentId.UX]: {
+        name: 'UX Expert',
+        title: 'UX Expert',
+        role: 'Design user experience and UI specifications.',
+        focus: 'User flows, wireframes, accessibility.',
+        icon: '🎨',
+        principles: ['Clarity', 'Consistency', 'Accessibility'],
+        system: 'You are a UX Expert. Provide user flows and component-level specs with accessibility guidelines.',
+        whenToUse: 'Use for UX design tasks, user flows, wireframes, and accessibility guidance.'
+      },
+      [AgentId.ARCHITECT]: {
+        name: 'Architect',
+        title: 'Architect',
+        role: 'Design system architecture and interfaces.',
+        focus: 'High-level design, data model, integration contracts.',
+        icon: '🏗️',
+        principles: ['Simplicity', 'Scalability', 'Observability'],
+        system: 'You are a Software Architect. Propose a pragmatic architecture, data model, and interface contracts with trade-offs.',
+        whenToUse: 'Use to design system architecture, data models, and integration contracts.'
+      },
+      [AgentId.PO]: {
+        name: 'Product Owner',
+        title: 'Product Owner',
+        role: 'Backlog refinement and planning.',
+        focus: 'Epics, user stories, acceptance criteria.',
+        icon: '📋',
+        principles: ['Vertical slices', 'INVEST stories', 'Definition of Ready/Done'],
+        system: 'You are a Product Owner. Break scope into epics and stories with clear acceptance criteria.',
+        whenToUse: 'Use to manage backlog, define epics and user stories, and prepare work for delivery.'
+      },
+      [AgentId.SM]: {
+        name: 'Scrum Master',
+        title: 'Scrum Master',
+        role: 'Facilitate delivery process.',
+        focus: 'Planning, impediment removal, continuous improvement.',
+        icon: '🧩',
+        principles: ['Transparency', 'Inspection', 'Adaptation'],
+        system: 'You are a Scrum Master. Propose an execution plan, identify risks, and suggest process improvements.',
+        whenToUse: 'Use to facilitate delivery planning, remove impediments, and improve processes.'
+      },
+      [AgentId.DEV]: {
+        name: 'Developer',
+        title: 'Developer',
+        role: 'Implement features with tests.',
+        focus: 'Clean code, tests, incremental delivery.',
+        icon: '💻',
+        principles: ['Testability', 'Readability', 'Small increments'],
+        system: 'You are a Developer. Produce code-level plans, implementation steps, and test strategy.',
+        whenToUse: 'Use to implement features, write tests, and produce code-level plans.'
+      },
+      [AgentId.QA]: {
+        name: 'QA Engineer',
+        title: 'QA Engineer',
+        role: 'Assure quality through tests and gates.',
+        focus: 'Test plan, automation, quality gates.',
+        icon: '✅',
+        principles: ['Prevent defects', 'Automate tests', 'Measure quality'],
+        system: 'You are a QA Engineer. Create a test plan with automated checks and quality gates.',
+        whenToUse: 'Use to design and execute test plans, automation, and quality gates.'
+      }
+    };
+
+    const meta = map[agentId];
+    if (!meta) return null;
+
+    const def: AgentDefinition = {
+      id: agentId,
+      name: meta.name,
+      title: meta.title,
+      icon: meta.icon,
+      role: meta.role,
+      style: '',
+      identity: '',
+      focus: meta.focus,
+      whenToUse: meta.whenToUse,
+      corePrinciples: meta.principles,
+      commands: [],
+      dependencies: {},
+      systemPrompt: meta.system,
+      customization: undefined,
+    };
+    return def;
   }
 
   /**
@@ -424,6 +561,17 @@ export class BmadService {
   }
 
   /**
+   * Toggle orchestrator-only mode (no subagent prompt injection)
+   */
+  static setOrchestratorOnly(value: boolean) {
+    BmadService.orchestratorOnly = value;
+  }
+
+  static getOrchestratorOnly(): boolean {
+    return BmadService.orchestratorOnly;
+  }
+
+  /**
    * Check if initialized
    */
   isInitialized(): boolean {
@@ -434,7 +582,20 @@ export class BmadService {
    * List all available agents
    */
   async listAgents(): Promise<string[]> {
-    return this.agentLoader.listAgents();
+    const fromDisk = await this.agentLoader.listAgents();
+    if (fromDisk.length > 0) return fromDisk;
+    // Fallback to built-in list when no .bmad-core exists
+    return [
+      AgentId.ANALYST,
+      AgentId.PM,
+      AgentId.ARCHITECT,
+      AgentId.UX,
+      AgentId.PO,
+      AgentId.SM,
+      AgentId.DEV,
+      AgentId.QA,
+      AgentId.ORCHESTRATOR,
+    ];
   }
 
   /**

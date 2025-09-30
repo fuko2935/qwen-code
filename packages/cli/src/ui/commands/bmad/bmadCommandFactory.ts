@@ -117,26 +117,59 @@ export function createOrchestratorCommand(): SlashCommand {
         };
       }
 
-      try {
-        // Inject orchestrator persona
-        await bmadService.injectOrchestratorPersona();
+      // If user provided a freeform prompt, start the BMAD workflow and delegate to subagents
+      const prompt = context.invocation?.args?.trim() || '';
+      if (prompt) {
+        try {
+          // Ensure session exists and store initial request in session context
+          const sessionManager = bmadService.getSessionManager();
+          const existing = await sessionManager.read();
 
+          await bmadService.persistStep({
+            mode: 'bmad-expert' as any,
+            projectType: existing?.projectType ?? 'greenfield',
+            currentPhase: (await import('../../../config/bmadConfig.js')).WorkflowPhase.INIT,
+            currentAgent: null,
+            context: {
+              ...(existing?.context || {}),
+              initialRequest: prompt,
+            },
+          });
+
+          const session = await sessionManager.read();
+          if (!session) {
+            throw new Error('Failed to initialize BMAD session');
+          }
+
+          // Run the workflow executor which delegates to subagents (no persona injection)
+          await bmadService.getWorkflowExecutor().execute(prompt, session);
+
+          return {
+            type: 'message',
+            messageType: 'info',
+            content: '🎭 Orchestrator: İş akışı başlatıldı ve görevler alt ajanlara delege ediliyor. İlerleme günlükleri üstte görüntülenir.',
+          };
+        } catch (error) {
+          return {
+            type: 'message',
+            messageType: 'error',
+            content: `Orchestrator başlatma/delege etme hatası: ${error instanceof Error ? error.message : String(error)}`,
+          };
+        }
+      }
+
+      // No prompt: show activation/help
+      try {
+        await bmadService.injectOrchestratorPersona();
         return {
           type: 'message',
           messageType: 'info',
-          content: 
+          content:
             `🎭 BMAD Orchestrator Activated!\n\n` +
-            `I'm your autonomous development orchestrator. Tell me about your project and I'll:\n` +
-            `  1. Analyze requirements\n` +
-            `  2. Create comprehensive documentation (PRD, Architecture)\n` +
-            `  3. Break down into implementable stories\n` +
-            `  4. Develop features with full testing\n` +
-            `  5. Ensure quality with automated QA\n\n` +
-            `Simply describe what you want to build, and I'll handle the rest!\n\n` +
-            `Available commands:\n` +
-            `  /bmad-resume - Resume interrupted workflow\n` +
-            `  /bmad-status - Check workflow progress\n` +
-            `  /bmad-agents - List all available agents\n`,
+            `Serbest bir istek yazarak (örn. /bmad <istek>) BMAD iş akışını başlatabilir veya aşağıdaki komutları kullanabilirsiniz:\n` +
+            `  /bmad-resume  — Yarım kalan iş akışını sürdür\n` +
+            `  /bmad-status  — Durumu görüntüle\n` +
+            `  /bmad-agents  — Mevcut ajanları listele\n`,
         };
       } catch (error) {
         return {

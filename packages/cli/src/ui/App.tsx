@@ -801,11 +801,10 @@ const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
   const bmadEnabledSubmitQuery = useCallback(
     (query: string) => {
       const isBmadMode = (settings.merged.bmadMode as string) === 'bmad-expert';
-      
-      // If BMAD mode is active and this is NOT a slash command, route to orchestrator
+
+      // BMAD Expert Mode: route freeform prompts to orchestrator command for delegation
       if (isBmadMode && !query.trim().startsWith('/')) {
-        // Initialize BMAD on first use
-        const bmadInitMessage = `🎭 BMAD Expert Mode: Routing your request through the Orchestrator...\n`;
+        const bmadInitMessage = `🎭 BMAD Expert Mode: İstek Orchestrator üzerinden alt ajanlara delege edilecek...\n`;
         addItem(
           {
             type: MessageType.INFO,
@@ -813,17 +812,17 @@ const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
           },
           Date.now(),
         );
-        
-        // Prepend BMAD orchestrator context to the query
-        const bmadWrappedQuery = `[BMAD Orchestrator Mode Active]\n\nProject Request: ${query}\n\nPlease analyze this request and guide me through the BMAD workflow phases:\n1. Analysis (requirements & market research)\n2. Product (PRD & specifications)\n3. UX Design (UI/UX & front-end specs)\n4. Architecture (system design)\n5. Planning (backlog & stories)\n6. Development (implementation)\n7. QA (quality assurance)\n\nLet's start with the first appropriate phase.`;
-        
-        submitQuery(bmadWrappedQuery);
-      } else {
-        // Normal mode or slash command: pass through
-        submitQuery(query);
+
+        // Use slash command pipeline so it runs the BMAD workflow executor, not the chat
+        // We pass the entire query as arguments to /bmad
+        void handleSlashCommand(`/bmad ${query}`);
+        return;
       }
+
+      // Normal mode or explicit slash command: pass through to chat
+      submitQuery(query);
     },
-    [settings.merged.bmadMode, submitQuery, addItem],
+    [settings.merged.bmadMode, submitQuery, addItem, handleSlashCommand],
   );
 
   // Welcome back functionality

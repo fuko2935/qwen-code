@@ -10,3 +10,10 @@ if (process.env['NO_COLOR'] !== undefined) {
 }
 
 import './src/test-utils/customMatchers.js';
+
+// Force consistent number formatting in tests regardless of system locale
+const originalToLocaleString = Number.prototype.toLocaleString;
+Number.prototype.toLocaleString = function (locales?: string | string[], options?: Intl.NumberFormatOptions) {
+  const forcedLocales = locales ?? 'en-US';
+  return originalToLocaleString.call(this, forcedLocales as any, options as any);
+};

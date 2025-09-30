@@ -10,6 +10,10 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { WorkspaceContext } from './workspaceContext.js';
 
+const isWindows = process.platform === 'win32';
+const itIfNotWindows = isWindows ? it.skip : it;
+const describeIfNotWindows = isWindows ? describe.skip : describe;
+
 describe('WorkspaceContext with real filesystem', () => {
   let tempDir: string;
   let cwd: string;
@@ -83,7 +87,7 @@ describe('WorkspaceContext with real filesystem', () => {
       expect(directories).toHaveLength(2);
     });
 
-    it('should handle symbolic links correctly', () => {
+    itIfNotWindows('should handle symbolic links correctly', () => {
       const realDir = path.join(tempDir, 'real');
       fs.mkdirSync(realDir, { recursive: true });
       const symlinkDir = path.join(tempDir, 'symlink-to-real');
@@ -158,7 +162,7 @@ describe('WorkspaceContext with real filesystem', () => {
       );
     });
 
-    describe('with symbolic link', () => {
+    describeIfNotWindows('with symbolic link', () => {
       describe('in the workspace', () => {
         let realDir: string;
         let symlinkDir: string;
@@ -239,7 +243,7 @@ describe('WorkspaceContext with real filesystem', () => {
         });
       });
 
-      it('should reject symbolic file links outside the workspace', () => {
+      itIfNotWindows('should reject symbolic file links outside the workspace', () => {
         const realFile = path.join(tempDir, 'real-file.txt');
         fs.writeFileSync(realFile, 'content');
 
@@ -251,7 +255,7 @@ describe('WorkspaceContext with real filesystem', () => {
         expect(workspaceContext.isPathWithinWorkspace(symlinkFile)).toBe(false);
       });
 
-      it('should reject non-existent symbolic file links outside the workspace', () => {
+      itIfNotWindows('should reject non-existent symbolic file links outside the workspace', () => {
         const realFile = path.join(tempDir, 'real-file.txt');
 
         const symlinkFile = path.join(cwd, 'symlink-to-real-file');
@@ -262,7 +266,7 @@ describe('WorkspaceContext with real filesystem', () => {
         expect(workspaceContext.isPathWithinWorkspace(symlinkFile)).toBe(false);
       });
 
-      it('should handle circular symlinks gracefully', () => {
+      itIfNotWindows('should handle circular symlinks gracefully', () => {
         const workspaceContext = new WorkspaceContext(cwd);
         const linkA = path.join(cwd, 'link-a');
         const linkB = path.join(cwd, 'link-b');

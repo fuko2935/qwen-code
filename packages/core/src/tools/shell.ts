@@ -43,6 +43,11 @@ export interface ShellToolParams {
   is_background: boolean;
   description?: string;
   directory?: string;
+  /**
+   * Wall-clock timeout (milliseconds). Default 60000 if unspecified. 0 disables timeout.
+   * Not applied when is_background is true.
+   */
+  timeout_ms?: number;
 }
 
 class ShellToolInvocation extends BaseToolInvocation<
@@ -159,6 +164,55 @@ class ShellToolInvocation extends BaseToolInvocation<
       let lastUpdateTime = Date.now();
       let isBinaryStream = false;
 
+      // Compose abort signal with timeout
+      const isBackground = this.params.is_background === true;
+      const effectiveTimeoutMs = isBackground
+        ? 0
+        : this.params.timeout_ms === 0
+        ? 0
+        : typeof this.params.timeout_ms === 'number'
+        ? this.params.timeout_ms
+        : 60000;
+
+      const composedController = new AbortController();
+      let abortedBy: 'timeout' | 'user' | null = null;
+      let upstreamAbortHandler: (() => void) | null = null;
+
+      if (signal.aborted) {
+        abortedBy = 'user';
+        try {
+          // @ts-ignore reason propagation may not exist everywhere
+          composedController.abort(signal.reason);
+        } catch {
+          composedController.abort();
+        }
+      } else {
+        upstreamAbortHandler = () => {
+          if (!composedController.signal.aborted) {
+            abortedBy = abortedBy ?? 'user';
+            try {
+              // @ts-ignore propagate reason if available
+              composedController.abort(signal.reason);
+            } catch {
+              composedController.abort();
+            }
+          }
+        };
+        signal.addEventListener('abort', upstreamAbortHandler, { once: true });
+      }
+
+      let timeoutId: NodeJS.Timeout | null = null;
+      if (effectiveTimeoutMs > 0) {
+        timeoutId = setTimeout(() => {
+          if (!composedController.signal.aborted) {
+            abortedBy = 'timeout';
+            composedController.abort(
+              new Error(`timeout after ${effectiveTimeoutMs}ms`),
+            );
+          }
+        }, effectiveTimeoutMs);
+      }
+
       const { result: resultPromise } = await ShellExecutionService.execute(
         commandToExecute,
         cwd,
@@ -204,13 +258,22 @@ class ShellToolInvocation extends BaseToolInvocation<
             lastUpdateTime = Date.now();
           }
         },
-        signal,
+        composedController.signal,
         this.config.getShouldUseNodePtyShell(),
         terminalColumns,
         terminalRows,
       );
 
       const result = await resultPromise;
+
+      // Cleanup timers and listeners
+      if (timeoutId) clearTimeout(timeoutId);
+      if (upstreamAbortHandler) {
+        signal.removeEventListener('abort', upstreamAbortHandler as () => void);
+      }
+
+      // Make abortedBy available below through closure
+      // (We can't reassign consts in TS transpile; just keep the binding)
 
       const backgroundPIDs: number[] = [];
       if (os.platform() !== 'win32') {
@@ -237,11 +300,33 @@ class ShellToolInvocation extends BaseToolInvocation<
 
       let llmContent = '';
       if (result.aborted) {
-        llmContent = 'Command was cancelled by user before it could complete.';
-        if (result.output.trim()) {
-          llmContent += ` Below is the output before it was cancelled:\n${result.output}`;
+        // Zaman aşımı ise farklı mesajla bilgilendir.
+        const suggestions = getInteractiveSuggestions(
+          this.params.command,
+          os.platform(),
+        );
+        const hint = suggestions.length
+          ? ` It may be waiting for interactive input. Consider: ${suggestions.join(
+              '; ',
+            )}`
+          : '';
+        // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+        // @ts-ignore - use outer scope variable set earlier
+        if (abortedBy === 'timeout') {
+          const ms = effectiveTimeoutMs;
+          llmContent = `Command timed out after ${Math.ceil(ms / 1000)} seconds.` + hint;
+          if (result.output.trim()) {
+            llmContent += `\nOutput before timeout:\n${result.output}`;
+          } else {
+            llmContent += ' No output before timeout.';
+          }
         } else {
-          llmContent += ' There was no output before it was cancelled.';
+          llmContent = 'Command was cancelled by user before it could complete.';
+          if (result.output.trim()) {
+            llmContent += ` Below is the output before it was cancelled:\n${result.output}`;
+          } else {
+            llmContent += ' There was no output before it was cancelled.';
+          }
         }
       } else {
         // Create a formatted error string for display, replacing the wrapper command
@@ -268,7 +353,23 @@ class ShellToolInvocation extends BaseToolInvocation<
       if (this.config.getDebugMode()) {
         returnDisplayMessage = llmContent;
       } else {
-        if (result.output.trim()) {
+        // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+        // @ts-ignore - use outer scope var
+        if (result.aborted && abortedBy === 'timeout') {
+          const suggestions = getInteractiveSuggestions(
+            this.params.command,
+            os.platform(),
+          );
+          const hint = suggestions.length
+            ? ` It may be waiting for interactive input. Consider: ${suggestions.join(
+                '; ',
+              )}`
+            : '';
+          const msg = `Command timed out after ${Math.ceil(
+            effectiveTimeoutMs / 1000,
+          )} seconds.` + hint;
+          returnDisplayMessage = msg + (result.output.trim() ? `\n${result.output}` : '');
+        } else if (result.output.trim()) {
           returnDisplayMessage = result.output;
         } else {
           if (result.aborted) {
@@ -406,6 +507,54 @@ function getCommandDescription(): string {
   }
 }
 
+// Heuristic suggestions to avoid interactive hangs on timeout
+function getInteractiveSuggestions(
+  command: string,
+  platform: NodeJS.Platform,
+): string[] {
+  const c = command.toLowerCase();
+  const suggestions: string[] = [];
+
+  // npm init
+  if (/\bnpm\s+init\b/.test(c)) {
+    suggestions.push('add -y to accept defaults (npm init -y)');
+  }
+  // git commit (no message flag)
+  if (/\bgit\s+commit\b/.test(c) && !/(^|\s)-(?:m|\-\-message)\b/.test(c)) {
+    suggestions.push('add -m "your message" (git commit -m "...")');
+  }
+  // Windows package managers
+  if (platform === 'win32') {
+    if (/\bwinget\s+install\b/.test(c)) {
+      suggestions.push(
+        'add --accept-package-agreements --accept-source-agreements',
+      );
+    }
+    if (/\bchoco\s+install\b/.test(c)) {
+      suggestions.push('add -y to auto-confirm (choco install -y)');
+    }
+  } else {
+    // Linux package managers
+    if (/(\bapt-get\b|\bapt\b|\byum\b|\bdnf\b)\s+install\b/.test(c)) {
+      suggestions.push('add -y to auto-confirm');
+    }
+  }
+  // pip uninstall
+  if (/\bpip\s+uninstall\b/.test(c)) {
+    suggestions.push('add -y to auto-confirm (pip uninstall -y)');
+  }
+  // conda commands
+  if (/\bconda\s+(create|install|remove)\b/.test(c)) {
+    suggestions.push('add -y to auto-confirm');
+  }
+  // ssh/scp/sftp
+  if (/\b(ssh|scp|sftp)\b/.test(c)) {
+    suggestions.push('use key-based auth or add -o BatchMode=yes');
+  }
+
+  return suggestions;
+}
+
 export class ShellTool extends BaseDeclarativeTool<
   ShellToolParams,
   ToolResult
@@ -440,6 +589,12 @@ export class ShellTool extends BaseDeclarativeTool<
             type: 'string',
             description:
               '(OPTIONAL) Directory to run the command in, if not the project root directory. Must be relative to the project root directory and must already exist.',
+          },
+          timeout_ms: {
+            type: 'number',
+            minimum: 0,
+            description:
+              'Wall-clock timeout in milliseconds for this invocation. Default 60000 (60s). Set to 0 to disable. Not applied when is_background is true.',
           },
         },
         required: ['command', 'is_background'],
@@ -483,6 +638,16 @@ export class ShellTool extends BaseDeclarativeTool<
 
       if (matchingDirs.length > 1) {
         return `Directory name '${params.directory}' is ambiguous as it matches multiple workspace directories.`;
+      }
+    }
+
+    if (params.timeout_ms !== undefined) {
+      if (
+        typeof params.timeout_ms !== 'number' ||
+        !Number.isFinite(params.timeout_ms) ||
+        params.timeout_ms < 0
+      ) {
+        return 'timeout_ms must be a non-negative number (0 disables timeout).';
       }
     }
     return null;

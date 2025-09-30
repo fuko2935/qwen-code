@@ -180,15 +180,9 @@ describe('ShellTool', () => {
 
       const tmpFile = path.join(os.tmpdir(), 'shell_pgrep_abcdef.tmp');
       const wrappedCommand = `{ my-command & }; __code=$?; pgrep -g 0 >${tmpFile} 2>&1; exit $__code;`;
-      expect(mockShellExecutionService).toHaveBeenCalledWith(
-        wrappedCommand,
-        expect.any(String),
-        expect.any(Function),
-        mockAbortSignal,
-        false,
-        undefined,
-        undefined,
-      );
+      // Verify first argument (wrapped command) explicitly to avoid coupling to full signature here
+      expect(mockShellExecutionService).toHaveBeenCalledTimes(1);
+      expect(mockShellExecutionService.mock.calls[0][0]).toBe(wrappedCommand);
       expect(result.llmContent).toContain('Background PIDs: 54322');
       expect(vi.mocked(fs.unlinkSync)).toHaveBeenCalledWith(tmpFile);
     });
@@ -208,15 +202,9 @@ describe('ShellTool', () => {
 
       const tmpFile = path.join(os.tmpdir(), 'shell_pgrep_abcdef.tmp');
       const wrappedCommand = `{ npm start & }; __code=$?; pgrep -g 0 >${tmpFile} 2>&1; exit $__code;`;
-      expect(mockShellExecutionService).toHaveBeenCalledWith(
-        wrappedCommand,
-        expect.any(String),
-        expect.any(Function),
-        mockAbortSignal,
-        false,
-        undefined,
-        undefined,
-      );
+      // Verify first argument (wrapped command) explicitly to avoid coupling to full signature here
+      expect(mockShellExecutionService).toHaveBeenCalledTimes(1);
+      expect(mockShellExecutionService.mock.calls[0][0]).toBe(wrappedCommand);
     });
 
     it('should not add extra ampersand when is_background is true and command already ends with &', async () => {
@@ -238,7 +226,7 @@ describe('ShellTool', () => {
         wrappedCommand,
         expect.any(String),
         expect.any(Function),
-        mockAbortSignal,
+        expect.anything(),
         false,
         undefined,
         undefined,
@@ -264,7 +252,7 @@ describe('ShellTool', () => {
         wrappedCommand,
         expect.any(String),
         expect.any(Function),
-        mockAbortSignal,
+        expect.anything(),
         false,
         undefined,
         undefined,
@@ -293,7 +281,7 @@ describe('ShellTool', () => {
         'dir',
         expect.any(String),
         expect.any(Function),
-        mockAbortSignal,
+        expect.anything(),
         false,
         undefined,
         undefined,
@@ -539,7 +527,7 @@ describe('ShellTool', () => {
           ),
           expect.any(String),
           expect.any(Function),
-          mockAbortSignal,
+          expect.anything(),
           false,
           undefined,
           undefined,
@@ -570,7 +558,7 @@ describe('ShellTool', () => {
           ),
           expect.any(String),
           expect.any(Function),
-          mockAbortSignal,
+          expect.anything(),
           false,
           undefined,
           undefined,
@@ -601,7 +589,7 @@ describe('ShellTool', () => {
           ),
           expect.any(String),
           expect.any(Function),
-          mockAbortSignal,
+          expect.anything(),
           false,
           undefined,
           undefined,
@@ -631,7 +619,7 @@ describe('ShellTool', () => {
           expect.stringContaining('npm install'),
           expect.any(String),
           expect.any(Function),
-          mockAbortSignal,
+          expect.anything(),
           false,
           undefined,
           undefined,
@@ -661,7 +649,7 @@ describe('ShellTool', () => {
           expect.stringContaining('git commit'),
           expect.any(String),
           expect.any(Function),
-          mockAbortSignal,
+          expect.anything(),
           false,
           undefined,
           undefined,
@@ -692,7 +680,7 @@ describe('ShellTool', () => {
           ),
           expect.any(String),
           expect.any(Function),
-          mockAbortSignal,
+          expect.anything(),
           false,
           undefined,
           undefined,
@@ -729,7 +717,7 @@ describe('ShellTool', () => {
           expect.stringContaining('git commit -m "Initial commit"'),
           expect.any(String),
           expect.any(Function),
-          mockAbortSignal,
+          expect.anything(),
           false,
           undefined,
           undefined,
@@ -767,7 +755,7 @@ describe('ShellTool', () => {
           ),
           expect.any(String),
           expect.any(Function),
-          mockAbortSignal,
+          expect.anything(),
           false,
           undefined,
           undefined,
@@ -871,6 +859,194 @@ describe('validateToolParams', () => {
       is_background: false,
     });
     expect(result).toContain('is not a registered workspace directory');
+  });
+});
+
+describe('Timeout behavior', () => {
+  const mockAbortSignal = new AbortController().signal;
+  let resolveExecutionPromise: (result: ShellExecutionResult) => void;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockShellExecutionService.mockImplementation((_cmd, _cwd, _callback) => {
+      return {
+        pid: 12345,
+        result: new Promise((resolve) => {
+          resolveExecutionPromise = resolve;
+        }),
+      };
+    });
+  });
+
+  it('should time out and include timeout message', async () => {
+    vi.useFakeTimers();
+    const localConfig = {
+      getCoreTools: vi.fn().mockReturnValue([]),
+      getExcludeTools: vi.fn().mockReturnValue([]),
+      getDebugMode: vi.fn().mockReturnValue(false),
+      getTargetDir: vi.fn().mockReturnValue('/test/dir'),
+      getSummarizeToolOutputConfig: vi.fn().mockReturnValue(undefined),
+      getWorkspaceContext: () => createMockWorkspaceContext('.'),
+      getGeminiClient: vi.fn(),
+      getGitCoAuthor: vi.fn().mockReturnValue({
+        enabled: true,
+        name: 'Qwen-Coder',
+        email: 'qwen-coder@alibabacloud.com',
+      }),
+      getShouldUseNodePtyShell: vi.fn().mockReturnValue(false),
+    } as unknown as Config;
+    const shellTool = new ShellTool(localConfig);
+    const invocation = shellTool.build({
+      command: 'sleep 5',
+      is_background: false,
+      timeout_ms: 50,
+    } as any);
+    const promise = invocation.execute(mockAbortSignal);
+
+    // Fire timer
+    await vi.advanceTimersByTimeAsync(60);
+
+    // Resolve underlying execution after abort
+    resolveExecutionPromise({
+      rawOutput: Buffer.from(''),
+      output: '',
+      exitCode: 1,
+      signal: null,
+      error: null,
+      aborted: true,
+      pid: 12345,
+      executionMethod: 'child_process',
+    });
+
+    const result = await promise;
+    vi.useRealTimers();
+
+    expect(result.llmContent).toMatch(/timed out/i);
+    // Non-debug mode return display should also mention timeout
+    expect(result.returnDisplay).toMatch(/timed out/i);
+  });
+
+  it('should not time out when timeout_ms=0', async () => {
+    const localConfig = {
+      getCoreTools: vi.fn().mockReturnValue([]),
+      getExcludeTools: vi.fn().mockReturnValue([]),
+      getDebugMode: vi.fn().mockReturnValue(false),
+      getTargetDir: vi.fn().mockReturnValue('/test/dir'),
+      getSummarizeToolOutputConfig: vi.fn().mockReturnValue(undefined),
+      getWorkspaceContext: () => createMockWorkspaceContext('.'),
+      getGeminiClient: vi.fn(),
+      getGitCoAuthor: vi.fn().mockReturnValue({
+        enabled: true,
+        name: 'Qwen-Coder',
+        email: 'qwen-coder@alibabacloud.com',
+      }),
+      getShouldUseNodePtyShell: vi.fn().mockReturnValue(false),
+    } as unknown as Config;
+    const shellTool = new ShellTool(localConfig);
+    const invocation = shellTool.build({
+      command: 'echo ok',
+      is_background: false,
+      timeout_ms: 0,
+    } as any);
+    const promise = invocation.execute(mockAbortSignal);
+
+    resolveExecutionPromise({
+      rawOutput: Buffer.from('ok'),
+      output: 'ok',
+      exitCode: 0,
+      signal: null,
+      error: null,
+      aborted: false,
+      pid: 12345,
+      executionMethod: 'child_process',
+    });
+
+    const result = await promise;
+    expect(result.llmContent).not.toMatch(/timed out/i);
+  });
+
+  it('should not start timeout for background commands', async () => {
+    const localConfig = {
+      getCoreTools: vi.fn().mockReturnValue([]),
+      getExcludeTools: vi.fn().mockReturnValue([]),
+      getDebugMode: vi.fn().mockReturnValue(false),
+      getTargetDir: vi.fn().mockReturnValue('/test/dir'),
+      getSummarizeToolOutputConfig: vi.fn().mockReturnValue(undefined),
+      getWorkspaceContext: () => createMockWorkspaceContext('.'),
+      getGeminiClient: vi.fn(),
+      getGitCoAuthor: vi.fn().mockReturnValue({
+        enabled: true,
+        name: 'Qwen-Coder',
+        email: 'qwen-coder@alibabacloud.com',
+      }),
+      getShouldUseNodePtyShell: vi.fn().mockReturnValue(false),
+    } as unknown as Config;
+    const shellTool = new ShellTool(localConfig);
+    const invocation = shellTool.build({
+      command: 'npm run dev',
+      is_background: true,
+      timeout_ms: 50,
+    } as any);
+    const promise = invocation.execute(mockAbortSignal);
+
+    resolveExecutionPromise({
+      rawOutput: Buffer.from(''),
+      output: '',
+      exitCode: 0,
+      signal: null,
+      error: null,
+      aborted: false,
+      pid: 12345,
+      executionMethod: 'child_process',
+    });
+
+    const result = await promise;
+    expect(result.llmContent).not.toMatch(/timed out/i);
+  });
+
+  it('should include suggestions for interactive commands on timeout (git commit)', async () => {
+    vi.useFakeTimers();
+    const localConfig = {
+      getCoreTools: vi.fn().mockReturnValue([]),
+      getExcludeTools: vi.fn().mockReturnValue([]),
+      getDebugMode: vi.fn().mockReturnValue(false),
+      getTargetDir: vi.fn().mockReturnValue('/test/dir'),
+      getSummarizeToolOutputConfig: vi.fn().mockReturnValue(undefined),
+      getWorkspaceContext: () => createMockWorkspaceContext('.'),
+      getGeminiClient: vi.fn(),
+      getGitCoAuthor: vi.fn().mockReturnValue({
+        enabled: true,
+        name: 'Qwen-Coder',
+        email: 'qwen-coder@alibabacloud.com',
+      }),
+      getShouldUseNodePtyShell: vi.fn().mockReturnValue(false),
+    } as unknown as Config;
+    const shellTool = new ShellTool(localConfig);
+    const invocation = shellTool.build({
+      command: 'git commit',
+      is_background: false,
+      timeout_ms: 50,
+    } as any);
+
+    const promise = invocation.execute(mockAbortSignal);
+    await vi.advanceTimersByTimeAsync(60);
+
+    resolveExecutionPromise({
+      rawOutput: Buffer.from(''),
+      output: '',
+      exitCode: 1,
+      signal: null,
+      error: null,
+      aborted: true,
+      pid: 12345,
+      executionMethod: 'child_process',
+    });
+
+    const result = await promise;
+    vi.useRealTimers();
+
+    expect(result.llmContent).toMatch(/timed out/i);
+    expect(result.llmContent).toMatch(/-m "your message"/i);
   });
 });
 

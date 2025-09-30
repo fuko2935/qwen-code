@@ -58,7 +58,7 @@ export class BuiltinCommandLoader implements ICommandLoader {
   ) {}
 
   private resolveBmadMode(): BmadMode {
-    const mode = this.settings?.merged?.bmadMode;
+    const mode = this.settings?.merged?.bmadMode as BmadMode | undefined;
     return mode === 'bmad-expert' ? 'bmad-expert' : BMAD_CONFIG.DEFAULT_MODE;
   }
 
@@ -67,13 +67,18 @@ export class BuiltinCommandLoader implements ICommandLoader {
       return;
     }
 
-    const resolveProjectRoot =
-      typeof (this.config as { getProjectRoot?: () => string | undefined }).getProjectRoot ===
-      'function'
-        ? (this.config as { getProjectRoot: () => string | undefined }).getProjectRoot
-        : undefined;
+    // Safely resolve project root; ensure method is invoked with correct 'this' binding
+    let cwd: string | undefined;
+    try {
+      cwd =
+        typeof (this.config as { getProjectRoot?: () => string | undefined })
+          .getProjectRoot === 'function'
+          ? (this.config as { getProjectRoot: () => string | undefined }).getProjectRoot()
+          : undefined;
+    } catch {
+      cwd = undefined;
+    }
 
-    const cwd = resolveProjectRoot?.();
     if (!cwd) {
       return;
     }
@@ -83,22 +88,35 @@ export class BuiltinCommandLoader implements ICommandLoader {
     const shouldReinitialize =
       mode === 'bmad-expert' && this.lastInitializedMode !== 'bmad-expert';
 
-    if (
-      (!this.bmadInitialization || shouldReinitialize) &&
-      mode === 'bmad-expert'
-    ) {
-      this.bmadInitialization = initializeBmadCommands(cwd, this.config, mode).catch(
-        (error) => {
+    try {
+      if (
+        (!this.bmadInitialization || shouldReinitialize) &&
+        mode === 'bmad-expert'
+      ) {
+        this.bmadInitialization = initializeBmadCommands(
+          cwd,
+          this.config,
+          mode,
+        ).catch((error) => {
+          // Ensure callers don't get a rejected promise later
           this.bmadInitialization = null;
           throw error;
-        },
+        });
+      } else if (!this.bmadInitialization) {
+        // In non-expert (normal) mode, there is nothing to initialize.
+        this.bmadInitialization = Promise.resolve();
+      }
+
+      this.lastInitializedMode = mode;
+      await this.bmadInitialization;
+    } catch (error) {
+      // Do not block built-in command loading if BMAD initialization fails
+      console.warn(
+        '[BMAD] Initialization failed, continuing without BMAD commands:',
+        (error as Error)?.message ?? error,
       );
-    } else if (!this.bmadInitialization) {
       this.bmadInitialization = Promise.resolve();
     }
-
-    this.lastInitializedMode = mode;
-    await this.bmadInitialization;
   }
 
   /**
@@ -111,7 +129,7 @@ export class BuiltinCommandLoader implements ICommandLoader {
   async loadCommands(_signal: AbortSignal): Promise<SlashCommand[]> {
     await this.ensureBmadInitialized();
 
-    const allDefinitions: Array<SlashCommand | null> = [
+    const baseDefinitions: Array<SlashCommand | null> = [
       aboutCommand,
       agentsCommand,
       approvalModeCommand,
@@ -145,10 +163,16 @@ export class BuiltinCommandLoader implements ICommandLoader {
       vimCommand,
       setupGithubCommand,
       terminalSetupCommand,
-      // BMAD commands
-      ...bmadCommands,
     ];
 
-    return allDefinitions.filter((cmd): cmd is SlashCommand => cmd !== null);
+    // Only include BMAD-specific commands when in BMAD Expert Mode
+    const mode = this.resolveBmadMode();
+    if (mode === 'bmad-expert') {
+      baseDefinitions.push(...bmadCommands);
+      const { bmadConfigCommand } = await import('../ui/commands/bmadConfigCommand.js');
+      baseDefinitions.push(bmadConfigCommand);
+    }
+
+    return baseDefinitions.filter((cmd): cmd is SlashCommand => cmd !== null);
   }
 }

@@ -14,6 +14,7 @@ Use `run_shell_command` to interact with the underlying system, run scripts, or 
 - `description` (string, optional): A brief description of the command's purpose, which will be shown to the user.
 - `directory` (string, optional): The directory (relative to the project root) in which to execute the command. If not provided, the command runs in the project root.
 - `is_background` (boolean, required): Whether to run the command in background. This parameter is required to ensure explicit decision-making about command execution mode. Set to true for long-running processes like development servers, watchers, or daemons that should continue running without blocking further commands. Set to false for one-time commands that should complete before proceeding.
+- `timeout_ms` (number, optional): Wall-clock timeout in milliseconds. Default 60000 (60s). Set to 0 to disable timeout. Not applied when `is_background` is true.
 
 ## How to use `run_shell_command` with Qwen Code
 
@@ -43,6 +44,17 @@ The tool intelligently handles background and foreground execution based on your
 - Git operations: `git commit`, `git push`
 - Test runs: `npm test`, `pytest`
 
+### Timeouts and interactive commands
+
+- By default, foreground commands time out after 60 seconds. You can override per command via `timeout_ms`. Set to `0` to disable.
+- When a command times out, the tool adds guidance to make typical interactive commands non-interactive, e.g.:
+  - `npm init` → add `-y`
+  - `git commit` without `-m` → add `-m "your message"`
+  - Windows: `winget install` → add `--accept-package-agreements --accept-source-agreements`; `choco install` → `-y`
+  - Linux: `apt/apt-get/yum/dnf install` → `-y`
+  - `pip uninstall` → `-y`; `conda create|install|remove` → `-y`
+  - `ssh/scp/sftp` → use key-based auth or `-o BatchMode=yes`
+
 ### Execution Information
 
 The tool returns detailed information about the execution, including:
@@ -60,6 +72,12 @@ Usage:
 
 ```bash
 run_shell_command(command="Your commands.", description="Your description of the command.", directory="Your execution directory.", is_background=false)
+```
+
+With a custom timeout (5 minutes):
+
+```bash
+run_shell_command(command="npm install", is_background=false, timeout_ms=300000)
 ```
 
 **Note:** The `is_background` parameter is required and must be explicitly specified for every command execution.
