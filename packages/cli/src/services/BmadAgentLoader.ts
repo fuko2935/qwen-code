@@ -6,8 +6,7 @@
 
 import fs from 'node:fs/promises';
 import path from 'node:path';
-// @ts-ignore - js-yaml types
-import yaml from 'js-yaml';
+import { load as yamlLoad } from 'js-yaml';
 import type { AgentDefinition } from '../config/bmadConfig.js';
 import { BmadPaths } from '../config/bmadConfig.js';
 
@@ -70,7 +69,7 @@ export class BmadAgentLoader {
 
     // Load and parse agent file
     const agent = await this.parseAgentFile(filePath);
-    
+
     // Update cache
     try {
       const stats = await fs.stat(filePath);
@@ -92,8 +91,8 @@ export class BmadAgentLoader {
     } catch (error) {
       throw new Error(
         `Failed to read agent file at ${filePath}: ${error instanceof Error ? error.message : String(error)}\n\n` +
-        `Make sure the .bmad-core directory exists and contains the required agent files.\n` +
-        `Expected path: ${filePath}`
+          `Make sure the .bmad-core directory exists and contains the required agent files.\n` +
+          `Expected path: ${filePath}`,
       );
     }
 
@@ -102,23 +101,23 @@ export class BmadAgentLoader {
     if (!yamlMatch) {
       throw new Error(
         `No YAML front matter found in agent file: ${filePath}\n\n` +
-        `Agent files must contain a YAML block with the agent definition.\n` +
-        `Format:\n` +
-        `\`\`\`yaml\n` +
-        `agent:\n` +
-        `  id: agent-id\n` +
-        `  name: Agent Name\n` +
-        `  ...\n` +
-        `\`\`\``
+          `Agent files must contain a YAML block with the agent definition.\n` +
+          `Format:\n` +
+          `\`\`\`yaml\n` +
+          `agent:\n` +
+          `  id: agent-id\n` +
+          `  name: Agent Name\n` +
+          `  ...\n` +
+          `\`\`\``,
       );
     }
 
     let parsed: ParsedYamlFrontMatter;
     try {
-      parsed = yaml.load(yamlMatch[1]) as ParsedYamlFrontMatter;
+      parsed = yamlLoad(yamlMatch[1]) as ParsedYamlFrontMatter;
     } catch (error) {
       throw new Error(
-        `Failed to parse YAML in agent file ${filePath}: ${error instanceof Error ? error.message : String(error)}`
+        `Failed to parse YAML in agent file ${filePath}: ${error instanceof Error ? error.message : String(error)}`,
       );
     }
 
@@ -165,14 +164,14 @@ export class BmadAgentLoader {
    * Parse command definitions from YAML
    */
   private parseCommands(
-    commandsRaw: Array<string | Record<string, unknown>>
+    commandsRaw: Array<string | Record<string, unknown>>,
   ): AgentDefinition['commands'] {
     const commands: AgentDefinition['commands'] = [];
 
     for (const cmd of commandsRaw) {
       if (typeof cmd === 'string') {
         // Simple format: "help: Show help"
-        const [name, description] = cmd.split(':').map(s => s.trim());
+        const [name, description] = cmd.split(':').map((s) => s.trim());
         commands.push({
           name: name || '',
           description: description || '',
@@ -181,11 +180,18 @@ export class BmadAgentLoader {
         // Complex format with taskId, templateId, etc.
         const [name, details] = Object.entries(cmd)[0];
         const description = typeof details === 'string' ? details : '';
-        const taskId = typeof details === 'object' && details !== null ? 
-          (details as Record<string, unknown>)['taskId'] as string | undefined : undefined;
-      const templateId = details ?
-          (details as Record<string, unknown>)['templateId'] as string | undefined : undefined;
-        
+        const taskId =
+          typeof details === 'object' && details !== null
+            ? ((details as Record<string, unknown>)['taskId'] as
+                | string
+                | undefined)
+            : undefined;
+        const templateId = details
+          ? ((details as Record<string, unknown>)['templateId'] as
+              | string
+              | undefined)
+          : undefined;
+
         commands.push({
           name,
           description,
@@ -213,8 +219,8 @@ export class BmadAgentLoader {
     try {
       const files = await fs.readdir(agentsDir);
       return files
-        .filter(f => f.endsWith('.md'))
-        .map(f => path.basename(f, '.md'));
+        .filter((f) => f.endsWith('.md'))
+        .map((f) => path.basename(f, '.md'));
     } catch {
       return [];
     }

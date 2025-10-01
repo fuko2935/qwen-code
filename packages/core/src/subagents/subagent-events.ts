@@ -19,7 +19,15 @@ export type SubAgentEvent =
   | 'tool_result'
   | 'tool_waiting_approval'
   | 'finish'
-  | 'error';
+  | 'error'
+  | 'session_started'
+  | 'session_switched'
+  | 'session_paused'
+  | 'session_resumed'
+  | 'session_completed'
+  | 'session_aborted'
+  | 'user_message_to_session'
+  | 'subagent_message_to_user';
 
 export enum SubAgentEventType {
   START = 'start',
@@ -31,6 +39,14 @@ export enum SubAgentEventType {
   TOOL_WAITING_APPROVAL = 'tool_waiting_approval',
   FINISH = 'finish',
   ERROR = 'error',
+  SESSION_STARTED = 'session_started',
+  SESSION_SWITCHED = 'session_switched',
+  SESSION_PAUSED = 'session_paused',
+  SESSION_RESUMED = 'session_resumed',
+  SESSION_COMPLETED = 'session_completed',
+  SESSION_ABORTED = 'session_aborted',
+  USER_MESSAGE_TO_SESSION = 'user_message_to_session',
+  SUBAGENT_MESSAGE_TO_USER = 'subagent_message_to_user',
 }
 
 export interface SubAgentStartEvent {
@@ -111,6 +127,70 @@ export interface SubAgentErrorEvent {
   subagentId: string;
   error: string;
   timestamp: number;
+}
+
+/**
+ * Base interface for session-related events.
+ */
+export interface SessionEventPayload {
+  sessionId: string;
+  timestamp: number;
+}
+
+/**
+ * Event: A new interactive session was started.
+ */
+export interface SubAgentSessionStartedEvent extends SessionEventPayload {
+  node: import('../session/types.js').SessionNode;
+}
+
+/**
+ * Event: The active session switched to a different one.
+ */
+export interface SubAgentSessionSwitchedEvent extends SessionEventPayload {
+  fromSessionId?: string;
+}
+
+/**
+ * Event: A session was paused.
+ * Inherits sessionId and timestamp from SessionEventPayload.
+ */
+export type SubAgentSessionPausedEvent = SessionEventPayload;
+
+/**
+ * Event: A paused session was resumed.
+ * Inherits sessionId and timestamp from SessionEventPayload.
+ */
+export type SubAgentSessionResumedEvent = SessionEventPayload;
+
+/**
+ * Event: A session completed successfully.
+ */
+export interface SubAgentSessionCompletedEvent extends SessionEventPayload {
+  result?: unknown;
+  terminateReason?: string;
+}
+
+/**
+ * Event: A session was aborted (error or cancellation).
+ */
+export interface SubAgentSessionAbortedEvent extends SessionEventPayload {
+  reason?: string;
+}
+
+/**
+ * Event: User sent a message to a session.
+ */
+export interface SubAgentUserMessageEvent extends SessionEventPayload {
+  text: string;
+}
+
+/**
+ * Event: Subagent sent a message (chunk or final) to user.
+ */
+export interface SubAgentToUserMessageEvent extends SessionEventPayload {
+  textChunk?: string;
+  finalText?: string;
 }
 
 export class SubAgentEventEmitter {

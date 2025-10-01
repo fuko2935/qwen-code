@@ -1,13 +1,18 @@
 /**
  * Retry Helper Service
- * 
+ *
  * Provides intelligent retry mechanisms with three escalation levels:
  * 1. Direct retry - Immediate retry without changes
  * 2. Context refresh - Reload session, agent, and tasks before retry
  * 3. User guidance - Pause and ask user for input before retry
  */
 
-import { BmadError, isRetryableError, isCriticalError, ErrorType } from '../errors/BmadErrors.js';
+import {
+  BmadError,
+  isRetryableError,
+  isCriticalError,
+  ErrorType,
+} from '../errors/BmadErrors.js';
 import type { BmadSessionManager } from './BmadSessionManager.js';
 import type { BmadAgentLoader } from './BmadAgentLoader.js';
 
@@ -70,7 +75,10 @@ export type ContextRefreshCallback = () => Promise<void>;
 /**
  * User guidance callback - returns user input or null if user cancels
  */
-export type UserGuidanceCallback = (error: BmadError, context: RetryContext) => Promise<string | null>;
+export type UserGuidanceCallback = (
+  error: BmadError,
+  context: RetryContext,
+) => Promise<string | null>;
 
 /**
  * Retry Helper Service
@@ -84,7 +92,7 @@ export class RetryHelper {
   constructor(
     config: Partial<RetryConfig> = {},
     sessionManager?: BmadSessionManager,
-    agentLoader?: BmadAgentLoader
+    agentLoader?: BmadAgentLoader,
   ) {
     this.config = { ...DEFAULT_RETRY_CONFIG, ...config };
     this.sessionManager = sessionManager;
@@ -107,9 +115,13 @@ export class RetryHelper {
       operationName?: string;
       contextRefresh?: ContextRefreshCallback;
       skipRetryForErrors?: ErrorType[];
-    } = {}
+    } = {},
   ): Promise<RetryResult<T>> {
-    const { operationName = 'operation', contextRefresh, skipRetryForErrors = [] } = options;
+    const {
+      operationName = 'operation',
+      contextRefresh,
+      skipRetryForErrors = [],
+    } = options;
 
     let lastError: BmadError | undefined;
     let recoveryAction: RetryResult<T>['recoveryAction'] = 'none';
@@ -123,7 +135,11 @@ export class RetryHelper {
 
       try {
         // Attempt 2: Context refresh
-        if (attempt === 2 && this.config.enableContextRefresh && contextRefresh) {
+        if (
+          attempt === 2 &&
+          this.config.enableContextRefresh &&
+          contextRefresh
+        ) {
           console.log(`🔄 Retry attempt ${attempt}: Refreshing context...`);
           await contextRefresh();
           recoveryAction = 'context-refresh';
@@ -131,9 +147,14 @@ export class RetryHelper {
 
         // Attempt 3: User guidance
         if (attempt === 3 && this.config.enableUserGuidance && lastError) {
-          console.log(`🤔 Retry attempt ${attempt}: Requesting user guidance...`);
-          const userInput = await this.requestUserGuidance(lastError, retryContext);
-          
+          console.log(
+            `🤔 Retry attempt ${attempt}: Requesting user guidance...`,
+          );
+          const userInput = await this.requestUserGuidance(
+            lastError,
+            retryContext,
+          );
+
           if (!userInput) {
             // User cancelled
             return {
@@ -151,7 +172,9 @@ export class RetryHelper {
         // Attempt 1: Direct retry (or subsequent attempts after preparation)
         if (attempt > 1) {
           await this.delay(this.calculateDelay(attempt));
-          console.log(`🔁 Retry attempt ${attempt}: Executing ${operationName}...`);
+          console.log(
+            `🔁 Retry attempt ${attempt}: Executing ${operationName}...`,
+          );
           if (attempt === 1) {
             recoveryAction = 'direct';
           }
@@ -168,17 +191,22 @@ export class RetryHelper {
           attempts: attempt,
           recoveryAction: attempt > 1 ? recoveryAction : 'none',
         };
-
       } catch (error) {
         // Wrap error if needed
-        lastError = error instanceof BmadError ? error : new BmadError(
-          String(error),
-          ErrorType.UNKNOWN,
-          'recoverable' as any,
-          { originalError: error instanceof Error ? error : undefined }
-        );
+        lastError =
+          error instanceof BmadError
+            ? error
+            : new BmadError(
+                String(error),
+                ErrorType.UNKNOWN,
+                'recoverable' as ErrorSeverity,
+                { originalError: error instanceof Error ? error : undefined },
+              );
 
-        console.error(`❌ ${operationName} failed on attempt ${attempt}:`, lastError.message);
+        console.error(
+          `❌ ${operationName} failed on attempt ${attempt}:`,
+          lastError.message,
+        );
 
         // Check if error should skip retry
         if (skipRetryForErrors.includes(lastError.type)) {
@@ -240,7 +268,7 @@ export class RetryHelper {
    */
   private async requestUserGuidance(
     error: BmadError,
-    context: RetryContext
+    context: RetryContext,
   ): Promise<string | null> {
     if (this.userGuidanceCallback) {
       return await this.userGuidanceCallback(error, context);
@@ -256,8 +284,9 @@ export class RetryHelper {
    */
   private calculateDelay(attempt: number): number {
     const delay = Math.min(
-      this.config.initialDelay * Math.pow(this.config.backoffMultiplier, attempt - 1),
-      this.config.maxDelay
+      this.config.initialDelay *
+        Math.pow(this.config.backoffMultiplier, attempt - 1),
+      this.config.maxDelay,
     );
     return delay;
   }
@@ -266,7 +295,7 @@ export class RetryHelper {
    * Delay helper
    */
   private delay(ms: number): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, ms));
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
   /**
@@ -274,7 +303,7 @@ export class RetryHelper {
    */
   createContextRefreshCallback(
     agentId?: string,
-    taskId?: string
+    _taskId?: string,
   ): ContextRefreshCallback {
     return async () => {
       console.log('🔄 Refreshing context...');
@@ -321,18 +350,18 @@ export class RetryHelper {
     options: {
       stopOnFirstFailure?: boolean;
       parallelExecution?: boolean;
-    } = {}
+    } = {},
   ): Promise<Array<RetryResult<T>>> {
     const { stopOnFirstFailure = false, parallelExecution = false } = options;
     const results: Array<RetryResult<T>> = [];
 
     if (parallelExecution) {
       // Execute all in parallel
-      const promises = operations.map(op =>
+      const promises = operations.map((op) =>
         this.executeWithRetry(op.execute, {
           operationName: op.name,
           contextRefresh: op.contextRefresh,
-        })
+        }),
       );
       return await Promise.all(promises);
     } else {
@@ -345,7 +374,9 @@ export class RetryHelper {
         results.push(result);
 
         if (stopOnFirstFailure && !result.success) {
-          console.error(`Batch execution stopped due to failure in "${op.name}"`);
+          console.error(
+            `Batch execution stopped due to failure in "${op.name}"`,
+          );
           break;
         }
       }
@@ -360,7 +391,7 @@ export class RetryHelper {
 export function createRetryHelper(
   config?: Partial<RetryConfig>,
   sessionManager?: BmadSessionManager,
-  agentLoader?: BmadAgentLoader
+  agentLoader?: BmadAgentLoader,
 ): RetryHelper {
   return new RetryHelper(config, sessionManager, agentLoader);
 }

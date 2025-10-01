@@ -7,9 +7,12 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
-// @ts-ignore - js-yaml types
-import yaml from 'js-yaml';
-import type { TaskContext, TaskResult, TaskDefinition } from '../config/bmadConfig.js';
+import { load as yamlLoad } from 'js-yaml';
+import type {
+  TaskContext,
+  TaskResult,
+  TaskDefinition,
+} from '../config/bmadConfig.js';
 import { BmadPaths } from '../config/bmadConfig.js';
 
 /**
@@ -48,7 +51,7 @@ export class BmadTaskRunner {
       if (task.templateId) {
         result.logs.push(`Rendering template: ${task.templateId}`);
         const rendered = await this.renderTemplate(task.templateId, ctx);
-        
+
         // Write output if specified
         if (task.outputPath) {
           const outputPath = this.resolveOutputPath(task.outputPath, ctx);
@@ -63,7 +66,9 @@ export class BmadTaskRunner {
     } catch (error) {
       result.success = false;
       result.error = error instanceof Error ? error : new Error(String(error));
-      result.logs.push(`Task failed: ${error instanceof Error ? error.message : String(error)}`);
+      result.logs.push(
+        `Task failed: ${error instanceof Error ? error.message : String(error)}`,
+      );
     }
 
     return result;
@@ -74,13 +79,13 @@ export class BmadTaskRunner {
    */
   private async resolveTask(taskPath: string): Promise<TaskDefinition> {
     let content: string;
-    
+
     try {
       content = await fs.readFile(taskPath, 'utf-8');
-    } catch (error) {
+    } catch (_error) {
       throw new Error(
         `Task file not found: ${taskPath}\n` +
-        `Make sure the task exists in .bmad-core/tasks/`
+          `Make sure the task exists in .bmad-core/tasks/`,
       );
     }
 
@@ -88,8 +93,8 @@ export class BmadTaskRunner {
     const yamlMatch = content.match(/```yaml\n([\s\S]*?)\n```/);
     if (yamlMatch) {
       try {
-        const parsed = yaml.load(yamlMatch[1]) as Record<string, unknown>;
-        
+        const parsed = yamlLoad(yamlMatch[1]) as Record<string, unknown>;
+
         return {
           id: path.basename(taskPath, '.md'),
           name: (parsed['name'] as string) || path.basename(taskPath, '.md'),
@@ -119,23 +124,25 @@ export class BmadTaskRunner {
    */
   async renderTemplate(templateId: string, ctx: TaskContext): Promise<string> {
     const templatePath = this.paths.template(templateId);
-    
+
     let content: string;
     try {
       content = await fs.readFile(templatePath, 'utf-8');
-    } catch (error) {
+    } catch (_error) {
       throw new Error(
         `Template file not found: ${templatePath}\n` +
-        `Make sure the template exists in .bmad-core/templates/`
+          `Make sure the template exists in .bmad-core/templates/`,
       );
     }
 
     // Parse YAML template
     let templateData: Record<string, unknown>;
     try {
-      templateData = yaml.load(content) as Record<string, unknown>;
+      templateData = yamlLoad(content) as Record<string, unknown>;
     } catch (error) {
-      throw new Error(`Failed to parse template YAML: ${error instanceof Error ? error.message : String(error)}`);
+      throw new Error(
+        `Failed to parse template YAML: ${error instanceof Error ? error.message : String(error)}`,
+      );
     }
 
     // Simple variable substitution
@@ -143,7 +150,8 @@ export class BmadTaskRunner {
 
     // Replace variables like {{projectName}}, {{description}}, etc.
     const variables: Record<string, string> = {
-      projectName: ctx.session.context['projectName'] as string || 'New Project',
+      projectName:
+        (ctx.session.context['projectName'] as string) || 'New Project',
       projectType: ctx.projectType,
       currentPhase: ctx.session.currentPhase,
       timestamp: new Date().toISOString(),
@@ -162,7 +170,10 @@ export class BmadTaskRunner {
   /**
    * Write output atomically (temp file + rename)
    */
-  private async writeOutputAtomic(outputPath: string, content: string): Promise<void> {
+  private async writeOutputAtomic(
+    outputPath: string,
+    content: string,
+  ): Promise<void> {
     // Ensure output directory exists
     const dir = path.dirname(outputPath);
     await fs.mkdir(dir, { recursive: true });
@@ -176,7 +187,7 @@ export class BmadTaskRunner {
     // Atomic write: temp file + rename
     const tempFile = path.join(
       os.tmpdir(),
-      `bmad-output-${Date.now()}-${Math.random().toString(36).slice(2)}.tmp`
+      `bmad-output-${Date.now()}-${Math.random().toString(36).slice(2)}.tmp`,
     );
 
     try {
@@ -202,9 +213,9 @@ export class BmadTaskRunner {
     // Replace variables
     const variables: Record<string, string> = {
       cwd: ctx.cwd,
-      projectName: ctx.session.context['projectName'] as string || 'project',
-      epic: ctx.session.context['currentEpic'] as string || 'epic',
-      story: ctx.session.context['currentStory'] as string || 'story',
+      projectName: (ctx.session.context['projectName'] as string) || 'project',
+      epic: (ctx.session.context['currentEpic'] as string) || 'epic',
+      story: (ctx.session.context['currentStory'] as string) || 'story',
       timestamp: Date.now().toString(),
     };
 
@@ -228,8 +239,8 @@ export class BmadTaskRunner {
     try {
       const files = await fs.readdir(tasksDir);
       return files
-        .filter(f => f.endsWith('.md'))
-        .map(f => path.basename(f, '.md'));
+        .filter((f) => f.endsWith('.md'))
+        .map((f) => path.basename(f, '.md'));
     } catch {
       return [];
     }
@@ -243,8 +254,8 @@ export class BmadTaskRunner {
     try {
       const files = await fs.readdir(templatesDir);
       return files
-        .filter(f => f.endsWith('.yaml') || f.endsWith('.yml'))
-        .map(f => path.basename(f, path.extname(f)));
+        .filter((f) => f.endsWith('.yaml') || f.endsWith('.yml'))
+        .map((f) => path.basename(f, path.extname(f)));
     } catch {
       return [];
     }

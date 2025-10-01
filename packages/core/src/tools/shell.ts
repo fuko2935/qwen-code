@@ -169,10 +169,10 @@ class ShellToolInvocation extends BaseToolInvocation<
       const effectiveTimeoutMs = isBackground
         ? 0
         : this.params.timeout_ms === 0
-        ? 0
-        : typeof this.params.timeout_ms === 'number'
-        ? this.params.timeout_ms
-        : 60000;
+          ? 0
+          : typeof this.params.timeout_ms === 'number'
+            ? this.params.timeout_ms
+            : 60000;
 
       const composedController = new AbortController();
       let abortedBy: 'timeout' | 'user' | null = null;
@@ -181,7 +181,7 @@ class ShellToolInvocation extends BaseToolInvocation<
       if (signal.aborted) {
         abortedBy = 'user';
         try {
-          // @ts-ignore reason propagation may not exist everywhere
+          // @ts-expect-error reason propagation may not exist everywhere
           composedController.abort(signal.reason);
         } catch {
           composedController.abort();
@@ -191,7 +191,7 @@ class ShellToolInvocation extends BaseToolInvocation<
           if (!composedController.signal.aborted) {
             abortedBy = abortedBy ?? 'user';
             try {
-              // @ts-ignore propagate reason if available
+              // @ts-expect-error propagate reason if available
               composedController.abort(signal.reason);
             } catch {
               composedController.abort();
@@ -314,14 +314,16 @@ class ShellToolInvocation extends BaseToolInvocation<
         // @ts-ignore - use outer scope variable set earlier
         if (abortedBy === 'timeout') {
           const ms = effectiveTimeoutMs;
-          llmContent = `Command timed out after ${Math.ceil(ms / 1000)} seconds.` + hint;
+          llmContent =
+            `Command timed out after ${Math.ceil(ms / 1000)} seconds.` + hint;
           if (result.output.trim()) {
             llmContent += `\nOutput before timeout:\n${result.output}`;
           } else {
             llmContent += ' No output before timeout.';
           }
         } else {
-          llmContent = 'Command was cancelled by user before it could complete.';
+          llmContent =
+            'Command was cancelled by user before it could complete.';
           if (result.output.trim()) {
             llmContent += ` Below is the output before it was cancelled:\n${result.output}`;
           } else {
@@ -365,10 +367,12 @@ class ShellToolInvocation extends BaseToolInvocation<
                 '; ',
               )}`
             : '';
-          const msg = `Command timed out after ${Math.ceil(
-            effectiveTimeoutMs / 1000,
-          )} seconds.` + hint;
-          returnDisplayMessage = msg + (result.output.trim() ? `\n${result.output}` : '');
+          const msg =
+            `Command timed out after ${Math.ceil(
+              effectiveTimeoutMs / 1000,
+            )} seconds.` + hint;
+          returnDisplayMessage =
+            msg + (result.output.trim() ? `\n${result.output}` : '');
         } else if (result.output.trim()) {
           returnDisplayMessage = result.output;
         } else {
@@ -520,7 +524,7 @@ function getInteractiveSuggestions(
     suggestions.push('add -y to accept defaults (npm init -y)');
   }
   // git commit (no message flag)
-  if (/\bgit\s+commit\b/.test(c) && !/(^|\s)-(?:m|\-\-message)\b/.test(c)) {
+  if (/\bgit\s+commit\b/.test(c) && !/(^|\s)-(?:m|--message)\b/.test(c)) {
     suggestions.push('add -m "your message" (git commit -m "...")');
   }
   // Windows package managers

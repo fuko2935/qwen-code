@@ -131,6 +131,8 @@ import { isNarrowWidth } from './utils/isNarrowWidth.js';
 import { useWorkspaceMigration } from './hooks/useWorkspaceMigration.js';
 import { WorkspaceMigrationDialog } from './components/WorkspaceMigrationDialog.js';
 import { WelcomeBackDialog } from './components/WelcomeBackDialog.js';
+import { useSessionManagement } from './hooks/useSessionManagement.js';
+import { SessionIndicator } from './components/SessionIndicator.js';
 
 // Maximum number of queued messages to display in UI to prevent performance issues
 const MAX_DISPLAYED_QUEUED_MESSAGES = 3;
@@ -181,6 +183,16 @@ const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
   const { stdout } = useStdout();
   const nightly = version.includes('nightly');
   const { history, addItem, clearItems, loadHistory } = useHistory();
+
+  // NEW: Session management
+  const {
+    isInSession,
+    getBreadcrumb,
+    getActiveStatus,
+    backToParent,
+    sendToActiveSession,
+    pendingSubagentMessage,
+  } = useSessionManagement(config, addItem);
 
   const [idePromptAnswered, setIdePromptAnswered] = useState(false);
   const currentIDE = config.getIdeClient().getCurrentIde();
@@ -786,16 +798,30 @@ const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
     handleVisionSwitchRequired,
   );
 
-  const pendingHistoryItems = useMemo(
-    () =>
-      [...pendingSlashCommandHistoryItems, ...pendingGeminiHistoryItems].map(
-        (item, index) => ({
-          ...item,
-          id: index,
-        }),
-      ),
-    [pendingSlashCommandHistoryItems, pendingGeminiHistoryItems],
-  );
+  // Combine pending items from slash commands, Gemini stream, and subagents
+  const pendingHistoryItems = useMemo(() => {
+    const items = [
+      ...pendingSlashCommandHistoryItems,
+      ...pendingGeminiHistoryItems,
+    ];
+
+    // Add pending subagent message if exists
+    if (pendingSubagentMessage) {
+      items.push({
+        type: 'gemini',
+        text: pendingSubagentMessage.text,
+      });
+    }
+
+    return items.map((item, index) => ({
+      ...item,
+      id: index,
+    }));
+  }, [
+    pendingSlashCommandHistoryItems,
+    pendingGeminiHistoryItems,
+    pendingSubagentMessage,
+  ]);
 
   // BMAD mode: Wrap submitQuery to route prompts to BMAD Orchestrator
   const bmadEnabledSubmitQuery = useCallback(
@@ -893,9 +919,22 @@ const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
   // Input handling - queue messages for processing
   const handleFinalSubmit = useCallback(
     (submittedValue: string) => {
-      addMessage(submittedValue);
+      const inSession = isInSession();
+      console.log(`[App] handleFinalSubmit - isInSession: ${inSession}`);
+      console.log(`[App] handleFinalSubmit - message: "${submittedValue}"`);
+
+      // NEW: Check if we're in an interactive session
+      if (inSession) {
+        console.log(`[App] Sending message to active session`);
+        // Send to active session instead of normal message queue
+        void sendToActiveSession(submittedValue);
+      } else {
+        console.log(`[App] Adding message to normal queue`);
+        // Normal message queue processing
+        addMessage(submittedValue);
+      }
     },
-    [addMessage],
+    [addMessage, isInSession, sendToActiveSession],
   );
 
   const handleIdePromptComplete = useCallback(
@@ -964,6 +1003,13 @@ const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
         return; // Request cancelled, end processing
       }
 
+      // 2b. Cancel interactive session messages
+      if (isInSession()) {
+        console.log('[App] Cancelling interactive session message');
+        config.getSessionManager().cancelCurrentMessage();
+        return;
+      }
+
       // 3. Clear input buffer (if has content)
       if (buffer.text.length > 0) {
         buffer.setText('');
@@ -980,6 +1026,8 @@ const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
       streamingState,
       cancelOngoingRequest,
       buffer,
+      config,
+      isInSession,
     ],
   );
 
@@ -988,6 +1036,15 @@ const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
       // Debug log keystrokes if enabled
       if (settings.merged.general?.debugKeystrokeLogging) {
         console.log('[DEBUG] Keystroke:', JSON.stringify(key));
+      }
+
+      // NEW: Session navigation - Alt+Left to go back
+      // Check for left arrow using string comparison
+      if (key.name === 'left' && key.meta) {
+        if (isInSession()) {
+          backToParent();
+          return;
+        }
       }
 
       let enteringConstrainHeightMode = false;
@@ -1050,6 +1107,8 @@ const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
       handleSlashCommand,
       isAuthenticating,
       settings.merged.general?.debugKeystrokeLogging,
+      isInSession,
+      backToParent,
     ],
   );
 
@@ -1261,7 +1320,13 @@ const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
             <Box flexDirection="column" key="header">
               {!(
                 settings.merged.ui?.hideBanner || config.getScreenReader()
-              ) && <Header version={version} nightly={nightly} bmadMode={settings.merged.bmadMode} />}
+              ) && (
+                <Header
+                  version={version}
+                  nightly={nightly}
+                  bmadMode={settings.merged.bmadMode}
+                />
+              )}
               {!(settings.merged.ui?.hideTips || config.getScreenReader()) && (
                 <Tips config={config} />
               )}
@@ -1487,7 +1552,10 @@ const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
             />
           ) : isModeDialogOpen ? (
             <ModeSelectionDialog
-              currentMode={(settings.merged.bmadMode as 'normal' | 'bmad-expert') || 'normal'}
+              currentMode={
+                (settings.merged.bmadMode as 'normal' | 'bmad-expert') ||
+                'normal'
+              }
               onSelect={handleModeSelect}
               onCancel={closeModeDialog}
             />
@@ -1605,6 +1673,26 @@ const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
                     <ShowMoreLines constrainHeight={constrainHeight} />
                   </Box>
                 </OverflowProvider>
+              )}
+
+              {/* NEW: Session indicator - Prominent display */}
+              {isInSession() && (
+                <Box
+                  flexDirection="column"
+                  marginTop={1}
+                  marginBottom={1}
+                  borderStyle="round"
+                  borderColor="cyan"
+                  paddingX={1}
+                  width="100%"
+                >
+                  <SessionIndicator
+                    activePath={getBreadcrumb()}
+                    status={getActiveStatus() || 'active'}
+                    onBack={backToParent}
+                    showShortcuts={true}
+                  />
+                </Box>
               )}
 
               {isInputActive && (

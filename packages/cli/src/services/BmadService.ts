@@ -5,18 +5,18 @@
  */
 
 import fs from 'node:fs/promises';
-import type { 
-  BmadMode, 
-  AgentDefinition, 
-  SessionState, 
+import type {
+  BmadMode,
+  AgentDefinition,
+  SessionState,
   ArtifactRefs,
   ProjectType,
 } from '../config/bmadConfig.js';
-import { 
-  BmadPaths, 
-  BMAD_CONFIG, 
-  WorkflowPhase, 
-  AgentId 
+import {
+  BmadPaths,
+  BMAD_CONFIG,
+  WorkflowPhase,
+  AgentId,
 } from '../config/bmadConfig.js';
 import { BmadAgentLoader } from './BmadAgentLoader.js';
 import { BmadSessionManager } from './BmadSessionManager.js';
@@ -63,7 +63,7 @@ export class BmadService {
     if (mode === 'bmad-expert') {
       // BMAD Expert Mode is now fully integrated, no external .bmad-core required
       console.log(
-        '\n⭐ BMAD Expert Mode initialized with built-in agents and workflows.\n'
+        '\n⭐ BMAD Expert Mode initialized with built-in agents and workflows.\n',
       );
 
       // Check for existing session and offer to resume
@@ -73,7 +73,7 @@ export class BmadService {
         if (session && this.sessionManager.canResume(session)) {
           console.log(
             `🔄 Found existing BMAD workflow in progress (Phase: ${session.currentPhase})\n` +
-            `Use /bmad resume to continue where you left off.\n`
+              `Use /bmad resume to continue where you left off.\n`,
           );
         }
       }
@@ -88,13 +88,9 @@ export class BmadService {
   async ensureCoreReady(): Promise<boolean> {
     try {
       await fs.access(this.paths.bmadCore);
-      
+
       // Check for required subdirectories
-      const requiredDirs = [
-        'agents',
-        'tasks',
-        'templates',
-      ];
+      const requiredDirs = ['agents', 'tasks', 'templates'];
 
       for (const dir of requiredDirs) {
         try {
@@ -161,7 +157,7 @@ export class BmadService {
     // Core principles
     if (agent.corePrinciples.length > 0) {
       parts.push('## Core Principles:');
-      agent.corePrinciples.forEach(principle => {
+      agent.corePrinciples.forEach((principle) => {
         parts.push(`- ${principle}`);
       });
       parts.push('');
@@ -172,7 +168,7 @@ export class BmadService {
       parts.push('## Available Commands:');
       parts.push('All BMAD commands start with `/bmad-` prefix.');
       parts.push('');
-      agent.commands.forEach(cmd => {
+      agent.commands.forEach((cmd) => {
         parts.push(`**/${cmd.name}** - ${cmd.description}`);
       });
       parts.push('');
@@ -206,9 +202,15 @@ export class BmadService {
   async detectProjectType(): Promise<ProjectType> {
     try {
       // Check for existing BMAD artifacts
-      const prdExists = await fs.access(this.paths.prd()).then(() => true).catch(() => false);
-      const archExists = await fs.access(this.paths.architecture()).then(() => true).catch(() => false);
-      
+      const prdExists = await fs
+        .access(this.paths.prd())
+        .then(() => true)
+        .catch(() => false);
+      const archExists = await fs
+        .access(this.paths.architecture())
+        .then(() => true)
+        .catch(() => false);
+
       if (prdExists || archExists) {
         return 'brownfield';
       }
@@ -262,9 +264,9 @@ export class BmadService {
 
     // Execute full workflow autonomously
     console.log(
-      `\n${this.currentAgent?.icon || '🤖'} ${this.currentAgent?.name || 'Agent'}: Analyzing your request...\n`
+      `\n${this.currentAgent?.icon || '🤖'} ${this.currentAgent?.name || 'Agent'}: Analyzing your request...\n`,
     );
-    
+
     await this.workflowExecutor.execute(userInput, session);
   }
 
@@ -277,13 +279,19 @@ export class BmadService {
     options?: {
       taskId?: string;
       context?: Record<string, unknown>;
-    }
+    },
   ): Promise<Partial<ArtifactRefs>> {
     // Check if subagent config is provided in context (from real delegation)
-    const subagentConfig = options?.context?.['subagentConfig'] as any;
-    
+    const subagentConfig = options?.context?.['subagentConfig'] as
+      | {
+          name: string;
+          systemPrompt: string;
+          icon?: string;
+        }
+      | undefined;
+
     let agentInfo: { icon: string; name: string; systemPrompt: string };
-    
+
     if (subagentConfig) {
       // Use built-in subagent configuration
       console.log(`\n🎯 Using built-in subagent: ${subagentConfig.name}`);
@@ -328,16 +336,23 @@ export class BmadService {
     console.log(`${'='.repeat(70)}`);
     console.log(`Agent Name: ${agentInfo.name}`);
     console.log(`System Prompt: ${agentInfo.systemPrompt.length} characters`);
-    console.log(`Delegated By: ${options?.context?.['delegatedBy'] || 'direct'}`);
+    console.log(
+      `Delegated By: ${options?.context?.['delegatedBy'] || 'direct'}`,
+    );
     console.log(`Task ID: ${options?.taskId || 'none'}`);
     console.log(`${'='.repeat(70)}\n`);
-    
+
     console.log(`📝 Agent Instructions Preview:`);
-    const preview = agentInfo.systemPrompt.substring(0, 200).replace(/\n/g, ' ');
+    const preview = agentInfo.systemPrompt
+      .substring(0, 200)
+      .replace(/\n/g, ' ');
     console.log(`   ${preview}...\n`);
 
     // Inject subagent's system prompt into conversation history
-    await this.injectAgentPromptToConversation(agentInfo.systemPrompt, agentInfo.name);
+    await this.injectAgentPromptToConversation(
+      agentInfo.systemPrompt,
+      agentInfo.name,
+    );
 
     // Return empty artifacts for now (task runner will populate)
     return {};
@@ -353,13 +368,15 @@ export class BmadService {
   ): Promise<void> {
     // Respect orchestrator-only mode: avoid injecting subagent prompts into history
     if (BmadService.orchestratorOnly) {
-      console.log('⚙️  Orchestrator-only mode: skipping subagent prompt injection');
+      console.log(
+        '⚙️  Orchestrator-only mode: skipping subagent prompt injection',
+      );
       return;
     }
     try {
       // Get the client from config
       const client = this._config.getGeminiClient();
-      
+
       if (!client || !client.isInitialized()) {
         console.warn('⚠️  Client not initialized, skipping prompt injection');
         return;
@@ -386,7 +403,9 @@ export class BmadService {
       });
 
       console.log(`✅ Agent prompt injected into conversation`);
-      console.log(`   The model is now operating with specialized ${agentName} instructions\n`);
+      console.log(
+        `   The model is now operating with specialized ${agentName} instructions\n`,
+      );
     } catch (error) {
       console.error(`❌ Failed to inject agent prompt: ${error}`);
     }
@@ -396,26 +415,53 @@ export class BmadService {
    * Build a minimal built-in agent definition when no files exist
    */
   private buildBuiltInAgent(agentId: string): AgentDefinition | null {
-    const map: Record<string, { name: string; title: string; role: string; focus: string; icon: string; principles: string[]; system: string; whenToUse: string }> = {
+    const map: Record<
+      string,
+      {
+        name: string;
+        title: string;
+        role: string;
+        focus: string;
+        icon: string;
+        principles: string[];
+        system: string;
+        whenToUse: string;
+      }
+    > = {
       [AgentId.ORCHESTRATOR]: {
         name: 'BMAD Orchestrator',
         title: 'BMAD Orchestrator',
         role: 'Autonomous project orchestrator coordinating BMAD workflow end-to-end.',
-        focus: 'Analyze requirements, plan, and coordinate specialized agents to deliver software.',
+        focus:
+          'Analyze requirements, plan, and coordinate specialized agents to deliver software.',
         icon: '🎭',
-        principles: ['Plan before act', 'Delegate to specialists', 'Persist progress', 'Ensure quality'],
-        system: 'You are the BMAD Orchestrator. Coordinate the BMAD workflow (Analysis → Product → UX → Architecture → Planning → Story Creation → Development → QA). Decide which specialized agent to delegate to next. Keep concise logs and persist session state.',
-        whenToUse: 'Use when initiating or coordinating an end-to-end project workflow, delegating to specialist agents as needed.'
+        principles: [
+          'Plan before act',
+          'Delegate to specialists',
+          'Persist progress',
+          'Ensure quality',
+        ],
+        system:
+          'You are the BMAD Orchestrator. Coordinate the BMAD workflow (Analysis → Product → UX → Architecture → Planning → Story Creation → Development → QA). Decide which specialized agent to delegate to next. Keep concise logs and persist session state.',
+        whenToUse:
+          'Use when initiating or coordinating an end-to-end project workflow, delegating to specialist agents as needed.',
       },
       [AgentId.ANALYST]: {
         name: 'Business Analyst',
         title: 'Business Analyst',
         role: 'Elicit and clarify business requirements.',
-        focus: 'Market analysis, user personas, problem framing, success metrics.',
+        focus:
+          'Market analysis, user personas, problem framing, success metrics.',
         icon: '📊',
-        principles: ['Clarify assumptions', 'Quantify impact', 'Document rationale'],
-        system: 'You are a Business Analyst. Elicit clear requirements, produce concise findings and acceptance criteria. Maintain traceability to goals and risks.',
-        whenToUse: 'Use to clarify requirements, analyze markets, and define user needs before product specification.'
+        principles: [
+          'Clarify assumptions',
+          'Quantify impact',
+          'Document rationale',
+        ],
+        system:
+          'You are a Business Analyst. Elicit clear requirements, produce concise findings and acceptance criteria. Maintain traceability to goals and risks.',
+        whenToUse:
+          'Use to clarify requirements, analyze markets, and define user needs before product specification.',
       },
       [AgentId.PM]: {
         name: 'Product Manager',
@@ -423,9 +469,15 @@ export class BmadService {
         role: 'Define product requirements and roadmap.',
         focus: 'PRD creation, prioritization, success metrics.',
         icon: '🧭',
-        principles: ['Value first', 'Prioritize ruthlessly', 'Communicate clearly'],
-        system: 'You are a Product Manager. Produce PRD sections with scope, personas, requirements, and success metrics.',
-        whenToUse: 'Use to draft or refine PRDs, prioritize features, and define measurable success criteria.'
+        principles: [
+          'Value first',
+          'Prioritize ruthlessly',
+          'Communicate clearly',
+        ],
+        system:
+          'You are a Product Manager. Produce PRD sections with scope, personas, requirements, and success metrics.',
+        whenToUse:
+          'Use to draft or refine PRDs, prioritize features, and define measurable success criteria.',
       },
       [AgentId.UX]: {
         name: 'UX Expert',
@@ -434,8 +486,10 @@ export class BmadService {
         focus: 'User flows, wireframes, accessibility.',
         icon: '🎨',
         principles: ['Clarity', 'Consistency', 'Accessibility'],
-        system: 'You are a UX Expert. Provide user flows and component-level specs with accessibility guidelines.',
-        whenToUse: 'Use for UX design tasks, user flows, wireframes, and accessibility guidance.'
+        system:
+          'You are a UX Expert. Provide user flows and component-level specs with accessibility guidelines.',
+        whenToUse:
+          'Use for UX design tasks, user flows, wireframes, and accessibility guidance.',
       },
       [AgentId.ARCHITECT]: {
         name: 'Architect',
@@ -444,8 +498,10 @@ export class BmadService {
         focus: 'High-level design, data model, integration contracts.',
         icon: '🏗️',
         principles: ['Simplicity', 'Scalability', 'Observability'],
-        system: 'You are a Software Architect. Propose a pragmatic architecture, data model, and interface contracts with trade-offs.',
-        whenToUse: 'Use to design system architecture, data models, and integration contracts.'
+        system:
+          'You are a Software Architect. Propose a pragmatic architecture, data model, and interface contracts with trade-offs.',
+        whenToUse:
+          'Use to design system architecture, data models, and integration contracts.',
       },
       [AgentId.PO]: {
         name: 'Product Owner',
@@ -453,9 +509,15 @@ export class BmadService {
         role: 'Backlog refinement and planning.',
         focus: 'Epics, user stories, acceptance criteria.',
         icon: '📋',
-        principles: ['Vertical slices', 'INVEST stories', 'Definition of Ready/Done'],
-        system: 'You are a Product Owner. Break scope into epics and stories with clear acceptance criteria.',
-        whenToUse: 'Use to manage backlog, define epics and user stories, and prepare work for delivery.'
+        principles: [
+          'Vertical slices',
+          'INVEST stories',
+          'Definition of Ready/Done',
+        ],
+        system:
+          'You are a Product Owner. Break scope into epics and stories with clear acceptance criteria.',
+        whenToUse:
+          'Use to manage backlog, define epics and user stories, and prepare work for delivery.',
       },
       [AgentId.SM]: {
         name: 'Scrum Master',
@@ -464,8 +526,10 @@ export class BmadService {
         focus: 'Planning, impediment removal, continuous improvement.',
         icon: '🧩',
         principles: ['Transparency', 'Inspection', 'Adaptation'],
-        system: 'You are a Scrum Master. Propose an execution plan, identify risks, and suggest process improvements.',
-        whenToUse: 'Use to facilitate delivery planning, remove impediments, and improve processes.'
+        system:
+          'You are a Scrum Master. Propose an execution plan, identify risks, and suggest process improvements.',
+        whenToUse:
+          'Use to facilitate delivery planning, remove impediments, and improve processes.',
       },
       [AgentId.DEV]: {
         name: 'Developer',
@@ -474,8 +538,10 @@ export class BmadService {
         focus: 'Clean code, tests, incremental delivery.',
         icon: '💻',
         principles: ['Testability', 'Readability', 'Small increments'],
-        system: 'You are a Developer. Produce code-level plans, implementation steps, and test strategy.',
-        whenToUse: 'Use to implement features, write tests, and produce code-level plans.'
+        system:
+          'You are a Developer. Produce code-level plans, implementation steps, and test strategy.',
+        whenToUse:
+          'Use to implement features, write tests, and produce code-level plans.',
       },
       [AgentId.QA]: {
         name: 'QA Engineer',
@@ -484,9 +550,11 @@ export class BmadService {
         focus: 'Test plan, automation, quality gates.',
         icon: '✅',
         principles: ['Prevent defects', 'Automate tests', 'Measure quality'],
-        system: 'You are a QA Engineer. Create a test plan with automated checks and quality gates.',
-        whenToUse: 'Use to design and execute test plans, automation, and quality gates.'
-      }
+        system:
+          'You are a QA Engineer. Create a test plan with automated checks and quality gates.',
+        whenToUse:
+          'Use to design and execute test plans, automation, and quality gates.',
+      },
     };
 
     const meta = map[agentId];
@@ -614,8 +682,8 @@ export class BmadService {
 
     console.log(
       `\n🔄 Resuming BMAD workflow from Phase: ${session.currentPhase}\n` +
-      `Current Agent: ${session.currentAgent || 'None'}\n` +
-      `Completed Steps: ${session.completedSteps.length}\n`
+        `Current Agent: ${session.currentAgent || 'None'}\n` +
+        `Completed Steps: ${session.completedSteps.length}\n`,
     );
 
     // Load the current agent

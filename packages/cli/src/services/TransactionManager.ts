@@ -1,6 +1,6 @@
 /**
  * Transaction Manager
- * 
+ *
  * Provides atomic file operations with rollback capabilities.
  * Uses temporary directories for staging changes before committing.
  */
@@ -63,7 +63,7 @@ export class TransactionManager {
 
   constructor(
     private cwd: string,
-    transactionId?: string
+    transactionId?: string,
   ) {
     this.transactionId = transactionId || uuidv4();
     this.tempDir = path.join(cwd, '.qwen', 'transactions', this.transactionId);
@@ -86,9 +86,9 @@ export class TransactionManager {
    */
   addCreate(targetPath: string, content: string): void {
     this.ensureNotCommitted();
-    
-    const absolutePath = path.isAbsolute(targetPath) 
-      ? targetPath 
+
+    const absolutePath = path.isAbsolute(targetPath)
+      ? targetPath
       : path.join(this.cwd, targetPath);
 
     this.operations.push({
@@ -103,9 +103,9 @@ export class TransactionManager {
    */
   addUpdate(targetPath: string, content: string): void {
     this.ensureNotCommitted();
-    
-    const absolutePath = path.isAbsolute(targetPath) 
-      ? targetPath 
+
+    const absolutePath = path.isAbsolute(targetPath)
+      ? targetPath
       : path.join(this.cwd, targetPath);
 
     this.operations.push({
@@ -120,9 +120,9 @@ export class TransactionManager {
    */
   addDelete(targetPath: string): void {
     this.ensureNotCommitted();
-    
-    const absolutePath = path.isAbsolute(targetPath) 
-      ? targetPath 
+
+    const absolutePath = path.isAbsolute(targetPath)
+      ? targetPath
       : path.join(this.cwd, targetPath);
 
     this.operations.push({
@@ -136,13 +136,13 @@ export class TransactionManager {
    */
   addMove(sourcePath: string, targetPath: string): void {
     this.ensureNotCommitted();
-    
-    const absoluteSource = path.isAbsolute(sourcePath) 
-      ? sourcePath 
+
+    const absoluteSource = path.isAbsolute(sourcePath)
+      ? sourcePath
       : path.join(this.cwd, sourcePath);
-    
-    const absoluteTarget = path.isAbsolute(targetPath) 
-      ? targetPath 
+
+    const absoluteTarget = path.isAbsolute(targetPath)
+      ? targetPath
       : path.join(this.cwd, targetPath);
 
     this.operations.push({
@@ -172,8 +172,8 @@ export class TransactionManager {
    */
   restoreCheckpoint(checkpointId: string): void {
     this.ensureNotCommitted();
-    
-    const checkpoint = this.checkpoints.find(cp => cp.id === checkpointId);
+
+    const checkpoint = this.checkpoints.find((cp) => cp.id === checkpointId);
     if (!checkpoint) {
       throw new Error(`Checkpoint ${checkpointId} not found`);
     }
@@ -195,20 +195,27 @@ export class TransactionManager {
           case TransactionOperationType.UPDATE:
             await this.stageWrite(operation);
             break;
-          
+
           case TransactionOperationType.DELETE:
             await this.stageDelete(operation);
             break;
-          
+
           case TransactionOperationType.MOVE:
             await this.stageMove(operation);
             break;
+          default:
+            // Handle unknown operation types
+            throw new FileOperationError(
+              'write',
+              operation.targetPath,
+              new Error(`Unknown operation type: ${(operation as any).type}`),
+            );
         }
       } catch (error) {
         throw new FileOperationError(
           'write',
           operation.targetPath,
-          error as Error
+          error as Error,
         );
       }
     }
@@ -224,8 +231,11 @@ export class TransactionManager {
       throw new Error('Content is required for create/update operations');
     }
 
-    const tempPath = path.join(this.tempDir, path.basename(operation.targetPath));
-    
+    const tempPath = path.join(
+      this.tempDir,
+      path.basename(operation.targetPath),
+    );
+
     // Write to temp file
     await fs.writeFile(tempPath, operation.content, 'utf-8');
     operation.backupPath = tempPath;
@@ -233,11 +243,17 @@ export class TransactionManager {
     // For updates, backup original file if it exists
     if (operation.type === TransactionOperationType.UPDATE) {
       try {
-        const originalContent = await fs.readFile(operation.targetPath, 'utf-8');
-        const backupPath = path.join(this.tempDir, `${path.basename(operation.targetPath)}.backup`);
+        const originalContent = await fs.readFile(
+          operation.targetPath,
+          'utf-8',
+        );
+        const backupPath = path.join(
+          this.tempDir,
+          `${path.basename(operation.targetPath)}.backup`,
+        );
         await fs.writeFile(backupPath, originalContent, 'utf-8');
         // Store backup path for potential rollback
-      } catch (error) {
+      } catch (_error) {
         // File might not exist yet, which is okay
       }
     }
@@ -247,15 +263,20 @@ export class TransactionManager {
    * Stage a delete operation
    */
   private async stageDelete(operation: FileOperation): Promise<void> {
+    // Backup file before deletion
     try {
-      // Backup file before deletion
       const content = await fs.readFile(operation.targetPath, 'utf-8');
-      const backupPath = path.join(this.tempDir, `${path.basename(operation.targetPath)}.backup`);
+      const backupPath = path.join(
+        this.tempDir,
+        `${path.basename(operation.targetPath)}.backup`,
+      );
       await fs.writeFile(backupPath, content, 'utf-8');
       operation.backupPath = backupPath;
-    } catch (error) {
+    } catch (_error) {
       // File might not exist, which is okay for delete
-      console.warn(`Could not backup file for deletion: ${operation.targetPath}`);
+      console.warn(
+        `Could not backup file for deletion: ${operation.targetPath}`,
+      );
     }
   }
 
@@ -270,11 +291,18 @@ export class TransactionManager {
     try {
       // Backup source file
       const content = await fs.readFile(operation.sourcePath, 'utf-8');
-      const backupPath = path.join(this.tempDir, `${path.basename(operation.sourcePath)}.backup`);
+      const backupPath = path.join(
+        this.tempDir,
+        `${path.basename(operation.sourcePath)}.backup`,
+      );
       await fs.writeFile(backupPath, content, 'utf-8');
       operation.backupPath = backupPath;
     } catch (error) {
-      throw new FileOperationError('read', operation.sourcePath, error as Error);
+      throw new FileOperationError(
+        'read',
+        operation.sourcePath,
+        error as Error,
+      );
     }
   }
 
@@ -283,7 +311,7 @@ export class TransactionManager {
    */
   async commit(): Promise<TransactionResult> {
     this.ensureNotCommitted();
-    
+
     const committedFiles: string[] = [];
 
     try {
@@ -300,21 +328,30 @@ export class TransactionManager {
             case TransactionOperationType.UPDATE:
               await this.commitWrite(operation);
               break;
-            
+
             case TransactionOperationType.DELETE:
               await this.commitDelete(operation);
               break;
-            
+
             case TransactionOperationType.MOVE:
               await this.commitMove(operation);
               break;
+            default:
+              // Handle unknown operation types
+              throw new FileOperationError(
+                'write',
+                operation.targetPath,
+                new Error(`Unknown operation type: ${(operation as any).type}`),
+              );
           }
           committedFiles.push(operation.targetPath);
         } catch (error) {
           // Rollback on any failure
-          console.error(`❌ Commit failed for ${operation.targetPath}, rolling back...`);
+          console.error(
+            `❌ Commit failed for ${operation.targetPath}, rolling back...`,
+          );
           await this.rollback(committedFiles);
-          
+
           return {
             success: false,
             committedFiles: [],
@@ -325,22 +362,23 @@ export class TransactionManager {
       }
 
       this.committed = true;
-      
+
       // Cleanup temp directory
       await this.cleanup();
 
-      console.log(`✅ Transaction ${this.transactionId} committed successfully`);
-      
+      console.log(
+        `✅ Transaction ${this.transactionId} committed successfully`,
+      );
+
       return {
         success: true,
         committedFiles,
         rolledBack: false,
       };
-
     } catch (error) {
       console.error(`❌ Transaction ${this.transactionId} failed:`, error);
       await this.rollback(committedFiles);
-      
+
       return {
         success: false,
         committedFiles: [],
@@ -366,7 +404,11 @@ export class TransactionManager {
     try {
       await fs.copyFile(operation.backupPath, operation.targetPath);
     } catch (error) {
-      throw new FileOperationError('write', operation.targetPath, error as Error);
+      throw new FileOperationError(
+        'write',
+        operation.targetPath,
+        error as Error,
+      );
     }
   }
 
@@ -397,7 +439,11 @@ export class TransactionManager {
     try {
       await fs.rename(operation.sourcePath, operation.targetPath);
     } catch (error) {
-      throw new FileOperationError('move', operation.targetPath, error as Error);
+      throw new FileOperationError(
+        'move',
+        operation.targetPath,
+        error as Error,
+      );
     }
   }
 
@@ -408,13 +454,18 @@ export class TransactionManager {
     console.log(`↩️  Rolling back ${committedFiles.length} files...`);
 
     for (const filePath of committedFiles) {
-      const operation = this.operations.find(op => op.targetPath === filePath);
+      const operation = this.operations.find(
+        (op) => op.targetPath === filePath,
+      );
       if (!operation) continue;
 
       try {
         if (operation.backupPath) {
           // Restore from backup
-          const backupContent = await fs.readFile(operation.backupPath, 'utf-8');
+          const backupContent = await fs.readFile(
+            operation.backupPath,
+            'utf-8',
+          );
           await fs.writeFile(operation.targetPath, backupContent, 'utf-8');
           console.log(`  ↺ Restored: ${filePath}`);
         } else if (operation.type === TransactionOperationType.CREATE) {
@@ -468,7 +519,10 @@ export class TransactionManager {
 /**
  * Create a new transaction
  */
-export async function createTransaction(cwd: string, transactionId?: string): Promise<TransactionManager> {
+export async function createTransaction(
+  cwd: string,
+  transactionId?: string,
+): Promise<TransactionManager> {
   const transaction = new TransactionManager(cwd, transactionId);
   await transaction.init();
   return transaction;

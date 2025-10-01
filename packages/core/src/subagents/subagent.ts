@@ -190,6 +190,14 @@ export class SubAgentScope {
   private hooks?: SubagentHooks;
   private readonly subagentId: string;
 
+  // NEW: Interactive mode support
+  private messageQueue: string[] = [];
+  private processing = false;
+  private sessionId?: string;
+  private interactiveAbortController?: AbortController;
+  private messageAbortController?: AbortController;
+  private interactiveChat?: GeminiChat;
+
   /**
    * Constructs a new SubAgentScope instance.
    * @param name - The name for the subagent, used for logging and identification.
@@ -293,10 +301,12 @@ export class SubAgentScope {
       );
 
       if (hasWildcard || asStrings.length === 0) {
+        // Check if nested tasks are allowed
+        const allowNested = this.runConfig.allow_nested_tasks === true;
         toolsList.push(
           ...toolRegistry
             .getFunctionDeclarations()
-            .filter((t) => t.name !== TaskTool.Name),
+            .filter((t) => allowNested || t.name !== TaskTool.Name),
         );
       } else {
         toolsList.push(
@@ -306,10 +316,11 @@ export class SubAgentScope {
       toolsList.push(...onlyInlineDecls);
     } else {
       // Inherit all available tools by default when not specified.
+      const allowNested = this.runConfig.allow_nested_tasks === true;
       toolsList.push(
         ...toolRegistry
           .getFunctionDeclarations()
-          .filter((t) => t.name !== TaskTool.Name),
+          .filter((t) => allowNested || t.name !== TaskTool.Name),
       );
     }
 
@@ -532,6 +543,457 @@ export class SubAgentScope {
         summary: summary as unknown as Record<string, unknown>,
         timestamp: Date.now(),
       });
+    }
+  }
+
+  /**
+   * Runs the subagent in interactive mode.
+   * This method enables bidirectional messaging between user and subagent.
+   * The subagent stays alive and processes messages from a queue until the session is closed.
+   *
+   * @param context - The current context state containing variables for prompt templating.
+   * @param options - Options including sessionId and optional abort signal.
+   * @returns A promise that resolves when the session is terminated.
+   */
+  async runInteractive(
+    context: ContextState,
+    options: { sessionId: string; externalSignal?: AbortSignal },
+  ): Promise<void> {
+    this.sessionId = options.sessionId;
+    this.interactiveAbortController = new AbortController();
+
+    // Set up external abort handling
+    const onAbort = () => this.interactiveAbortController?.abort();
+    if (options.externalSignal) {
+      if (options.externalSignal.aborted) {
+        this.interactiveAbortController.abort();
+        this.terminateMode = SubagentTerminateMode.CANCELLED;
+        return;
+      }
+      options.externalSignal.addEventListener('abort', onAbort, { once: true });
+    }
+
+    try {
+      // Create chat object
+      this.interactiveChat = await this.createChatObject(context);
+      if (!this.interactiveChat) {
+        this.terminateMode = SubagentTerminateMode.ERROR;
+        return;
+      }
+
+      // Bind to SessionManager
+      const sessionManager = this.runtimeContext.getSessionManager();
+      sessionManager.bindScope(this.sessionId, this);
+
+      // Initialize stats
+      const startTime = Date.now();
+      this.executionStats.startTimeMs = startTime;
+      this.stats.start(startTime);
+
+      // Emit start event
+      this.eventEmitter?.emit(SubAgentEventType.START, {
+        subagentId: this.subagentId,
+        name: this.name,
+        model: this.modelConfig.model,
+        tools: (this.toolConfig?.tools || ['*']).map((t) =>
+          typeof t === 'string' ? t : t.name,
+        ),
+        timestamp: Date.now(),
+      } as SubAgentStartEvent);
+
+      // If task_prompt exists, auto-enqueue first message
+      const taskPrompt = context.get('task_prompt');
+      if (taskPrompt) {
+        await this.enqueueUserMessage(String(taskPrompt));
+      }
+
+      // Wait until aborted (interactive sessions stay alive)
+      await new Promise<void>((resolve) => {
+        this.interactiveAbortController!.signal.addEventListener(
+          'abort',
+          () => resolve(),
+          { once: true },
+        );
+      });
+
+      this.terminateMode = SubagentTerminateMode.CANCELLED;
+    } catch (error) {
+      console.error('Error during interactive subagent execution:', error);
+      this.terminateMode = SubagentTerminateMode.ERROR;
+      this.eventEmitter?.emit(SubAgentEventType.ERROR, {
+        subagentId: this.subagentId,
+        error: error instanceof Error ? error.message : String(error),
+        timestamp: Date.now(),
+      } as SubAgentErrorEvent);
+      throw error;
+    } finally {
+      if (options.externalSignal) {
+        options.externalSignal.removeEventListener('abort', onAbort);
+      }
+      this.executionStats.totalDurationMs =
+        Date.now() - this.executionStats.startTimeMs;
+
+      const summary = this.stats.getSummary(Date.now());
+      this.eventEmitter?.emit(SubAgentEventType.FINISH, {
+        subagentId: this.subagentId,
+        finalText: this.finalText,
+        terminateReason: this.terminateMode,
+        timestamp: Date.now(),
+        rounds: summary.rounds,
+        totalDurationMs: summary.totalDurationMs,
+        totalToolCalls: summary.totalToolCalls,
+        successfulToolCalls: summary.successfulToolCalls,
+        failedToolCalls: summary.failedToolCalls,
+        inputTokens: summary.inputTokens,
+        outputTokens: summary.outputTokens,
+        totalTokens: summary.totalTokens,
+      } as SubAgentFinishEvent);
+
+      // Log telemetry
+      const endEvent = new SubagentExecutionEvent(
+        this.name,
+        this.terminateMode === SubagentTerminateMode.GOAL
+          ? 'completed'
+          : 'failed',
+        {
+          terminate_reason: this.terminateMode,
+          result: this.finalText,
+          execution_summary: this.stats.formatCompact(
+            'Interactive subagent execution completed',
+          ),
+        },
+      );
+      logSubagentExecution(this.runtimeContext, endEvent);
+    }
+  }
+
+  /**
+   * Enqueues a user message for processing in interactive mode.
+   * If not currently processing, starts processing immediately.
+   *
+   * @param text - The user message text to enqueue.
+   */
+  async enqueueUserMessage(text: string): Promise<void> {
+    console.log(
+      `[SubAgentScope] enqueueUserMessage called for session: ${this.sessionId}`,
+    );
+    console.log(`[SubAgentScope] Message text: "${text}"`);
+    console.log(
+      `[SubAgentScope] Current queue length: ${this.messageQueue.length}`,
+    );
+    console.log(`[SubAgentScope] Currently processing: ${this.processing}`);
+
+    if (!this.sessionId) {
+      console.warn(
+        '[SubAgentScope] enqueueUserMessage called but no sessionId set (not in interactive mode)',
+      );
+      return;
+    }
+
+    this.messageQueue.push(text);
+    console.log(
+      `[SubAgentScope] Message added to queue. New length: ${this.messageQueue.length}`,
+    );
+
+    // Emit user message event
+    this.eventEmitter?.emit('user_message_to_session' as SubAgentEventType, {
+      sessionId: this.sessionId,
+      text,
+      timestamp: Date.now(),
+    });
+
+    // Start processing if not already processing
+    if (!this.processing) {
+      console.log(`[SubAgentScope] Starting processNextInteractive`);
+      void this.processNextInteractive();
+    } else {
+      console.log(
+        `[SubAgentScope] Already processing, message will be handled when current processing completes`,
+      );
+    }
+  }
+
+  /**
+   * Processes queued messages one at a time in interactive mode.
+   * This method runs in a loop until the queue is empty.
+   */
+  private async processNextInteractive(): Promise<void> {
+    if (this.processing || !this.interactiveChat) {
+      return;
+    }
+
+    this.processing = true;
+
+    // Create a per-message abort controller
+    this.messageAbortController = new AbortController();
+
+    try {
+      while (this.messageQueue.length > 0) {
+        // Check session-level abort signal
+        if (this.interactiveAbortController?.signal.aborted) {
+          console.log(
+            '[SubAgentScope] Session aborted, stopping message processing',
+          );
+          break;
+        }
+
+        const text = this.messageQueue.shift()!;
+        const toolRegistry = this.runtimeContext.getToolRegistry();
+
+        // Prepare tools (same logic as runNonInteractive)
+        const toolsList: FunctionDeclaration[] = [];
+        if (this.toolConfig) {
+          const asStrings = this.toolConfig.tools.filter(
+            (t): t is string => typeof t === 'string',
+          );
+          const hasWildcard = asStrings.includes('*');
+          const onlyInlineDecls = this.toolConfig.tools.filter(
+            (t): t is FunctionDeclaration => typeof t !== 'string',
+          );
+
+          if (hasWildcard || asStrings.length === 0) {
+            // Check if nested tasks are allowed
+            const allowNested = this.runConfig.allow_nested_tasks === true;
+            toolsList.push(
+              ...toolRegistry
+                .getFunctionDeclarations()
+                .filter((t) => allowNested || t.name !== TaskTool.Name),
+            );
+          } else {
+            toolsList.push(
+              ...toolRegistry.getFunctionDeclarationsFiltered(asStrings),
+            );
+          }
+          toolsList.push(...onlyInlineDecls);
+        } else {
+          // Default: all tools except Task (unless nested allowed)
+          const allowNested = this.runConfig.allow_nested_tasks === true;
+          toolsList.push(
+            ...toolRegistry
+              .getFunctionDeclarations()
+              .filter((t) => allowNested || t.name !== TaskTool.Name),
+          );
+        }
+
+        // Send message
+        const currentMessages: Content[] = [
+          { role: 'user', parts: [{ text }] },
+        ];
+
+        const turnCounter = ++this.executionStats.rounds;
+        const promptId = `${this.runtimeContext.getSessionId()}#${this.subagentId}#${turnCounter}`;
+
+        this.eventEmitter?.emit(SubAgentEventType.ROUND_START, {
+          subagentId: this.subagentId,
+          round: turnCounter,
+          promptId,
+          timestamp: Date.now(),
+        } as SubAgentRoundEvent);
+
+        const messageParams = {
+          message: currentMessages[0]?.parts || [],
+          config: {
+            abortSignal: this.messageAbortController!.signal,
+            tools: [{ functionDeclarations: toolsList }],
+          },
+        };
+
+        console.log(`[SubAgentScope] Sending message to LLM...`);
+        const responseStream = await this.interactiveChat.sendMessageStream(
+          messageParams,
+          promptId,
+        );
+        console.log(`[SubAgentScope] Response stream received, processing...`);
+
+        // Process stream
+        const functionCalls: FunctionCall[] = [];
+        let roundText = '';
+        let lastUsage: GenerateContentResponseUsageMetadata | undefined =
+          undefined;
+        let chunkCount = 0;
+
+        for await (const streamEvent of responseStream) {
+          chunkCount++;
+          console.log(
+            `[SubAgentScope] Stream event ${chunkCount}: type=${streamEvent.type}`,
+          );
+          // Check both message-level and session-level abort
+          if (this.messageAbortController?.signal.aborted) {
+            console.log(
+              '[SubAgentScope] Message cancelled by user, stopping current message',
+            );
+            break;
+          }
+          if (this.interactiveAbortController?.signal.aborted) {
+            console.log(
+              '[SubAgentScope] Session aborted, stopping all processing',
+            );
+            break;
+          }
+
+          if (streamEvent.type === 'retry') {
+            continue;
+          }
+
+          if (streamEvent.type === 'chunk') {
+            const resp = streamEvent.value;
+            if (resp.functionCalls) functionCalls.push(...resp.functionCalls);
+
+            const content = resp.candidates?.[0]?.content;
+            const parts = content?.parts || [];
+
+            for (const p of parts) {
+              const txt = (p as Part & { text?: string }).text;
+              if (txt) {
+                roundText += txt;
+                console.log(
+                  `[SubAgentScope] Extracted text chunk (${txt.length} chars): "${txt.substring(0, 50)}..."`,
+                );
+
+                // Emit both stream text event and subagent-to-user message event
+                this.eventEmitter?.emit(SubAgentEventType.STREAM_TEXT, {
+                  subagentId: this.subagentId,
+                  round: turnCounter,
+                  text: txt,
+                  timestamp: Date.now(),
+                } as SubAgentStreamTextEvent);
+                console.log(`[SubAgentScope] Emitted STREAM_TEXT event`);
+
+                this.eventEmitter?.emit(
+                  'subagent_message_to_user' as SubAgentEventType,
+                  {
+                    sessionId: this.sessionId,
+                    textChunk: txt,
+                    timestamp: Date.now(),
+                  },
+                );
+                console.log(
+                  `[SubAgentScope] Emitted SUBAGENT_MESSAGE_TO_USER event`,
+                );
+
+                // ALSO emit to SessionManager for UI bridging
+                const sessionManager = this.runtimeContext.getSessionManager();
+                // SessionManager has a private emit method, access via unknown cast
+                (sessionManager as unknown as { emit: (event: unknown) => void }).emit({
+                  type: 'SUBAGENT_MESSAGE_TO_USER',
+                  sessionId: this.sessionId!,
+                  textChunk: txt,
+                  timestamp: Date.now(),
+                });
+                console.log(`[SubAgentScope] Forwarded to SessionManager`);
+              }
+            }
+
+            if (resp.usageMetadata) lastUsage = resp.usageMetadata;
+          }
+        }
+
+        // Update token usage
+        if (lastUsage) {
+          const inTok = Number(lastUsage.promptTokenCount || 0);
+          const outTok = Number(lastUsage.candidatesTokenCount || 0);
+          if (isFinite(inTok) || isFinite(outTok)) {
+            this.stats.recordTokens(
+              isFinite(inTok) ? inTok : 0,
+              isFinite(outTok) ? outTok : 0,
+            );
+            this.executionStats.inputTokens =
+              (this.executionStats.inputTokens || 0) +
+              (isFinite(inTok) ? inTok : 0);
+            this.executionStats.outputTokens =
+              (this.executionStats.outputTokens || 0) +
+              (isFinite(outTok) ? outTok : 0);
+            this.executionStats.totalTokens =
+              (this.executionStats.inputTokens || 0) +
+              (this.executionStats.outputTokens || 0);
+            this.executionStats.estimatedCost =
+              (this.executionStats.inputTokens || 0) * 3e-5 +
+              (this.executionStats.outputTokens || 0) * 6e-5;
+          }
+        }
+
+        // Handle function calls if any
+        if (
+          functionCalls.length > 0 &&
+          !this.messageAbortController?.signal.aborted
+        ) {
+          await this.processFunctionCalls(
+            functionCalls,
+            this.messageAbortController!,
+            promptId,
+            turnCounter,
+          );
+          // Note: In interactive mode, we don't auto-send results back to chat.
+          // Results are handled by processFunctionCalls and may trigger new messages.
+        }
+
+        // Emit subagent final message for this turn if text was generated
+        if (roundText && roundText.trim().length > 0) {
+          this.finalText = roundText.trim();
+          this.eventEmitter?.emit(
+            'subagent_message_to_user' as SubAgentEventType,
+            {
+              sessionId: this.sessionId,
+              finalText: this.finalText,
+              timestamp: Date.now(),
+            },
+          );
+        }
+
+        this.eventEmitter?.emit(SubAgentEventType.ROUND_END, {
+          subagentId: this.subagentId,
+          round: turnCounter,
+          promptId,
+          timestamp: Date.now(),
+        } as SubAgentRoundEvent);
+      }
+    } catch (error) {
+      console.error('Error during interactive message processing:', error);
+      this.eventEmitter?.emit(SubAgentEventType.ERROR, {
+        subagentId: this.subagentId,
+        error: error instanceof Error ? error.message : String(error),
+        timestamp: Date.now(),
+      } as SubAgentErrorEvent);
+    } finally {
+      this.processing = false;
+      this.messageAbortController = undefined;
+
+      // If there are still messages in queue and session is not aborted, process them
+      if (
+        this.messageQueue.length > 0 &&
+        !this.interactiveAbortController?.signal.aborted
+      ) {
+        console.log(
+          `[SubAgentScope] Queue has ${this.messageQueue.length} remaining messages, continuing processing`,
+        );
+        // Use setImmediate to avoid blocking
+        setImmediate(() => {
+          if (this.messageQueue.length > 0) {
+            void this.processNextInteractive();
+          }
+        });
+      } else {
+        console.log(
+          `[SubAgentScope] Processing complete. Queue length: ${this.messageQueue.length}, Session aborted: ${this.interactiveAbortController?.signal.aborted}`,
+        );
+      }
+    }
+  }
+
+  /**
+   * Cancels the currently processing message in interactive mode.
+   * The session remains active and can process new messages.
+   */
+  cancelCurrentMessage(): void {
+    console.log('[SubAgentScope] cancelCurrentMessage called');
+    if (
+      this.messageAbortController &&
+      !this.messageAbortController.signal.aborted
+    ) {
+      console.log('[SubAgentScope] Aborting current message');
+      this.messageAbortController.abort();
+    } else {
+      console.log('[SubAgentScope] No active message to cancel');
     }
   }
 
