@@ -6,6 +6,7 @@
 
 import { BaseDeclarativeTool, BaseToolInvocation, Kind } from './tools.js';
 import { ToolNames } from './tool-names.js';
+import { ToolErrorType } from './tool-error.js';
 import type {
   ToolResult,
   ToolResultDisplay,
@@ -22,6 +23,7 @@ import {
   type SubagentConfig,
   SubagentTerminateMode,
 } from '../subagents/types.js';
+import type { SubagentSessionConfig } from '../session/types.js';
 import { ContextState } from '../subagents/subagent.js';
 import {
   SubAgentEventEmitter,
@@ -39,6 +41,12 @@ export interface TaskParams {
   description: string;
   prompt: string;
   subagent_type: string;
+  // NEW: Session configuration parameters
+  interactive?: boolean;
+  autoSwitch?: boolean;
+  maxDepth?: number;
+  inheritContext?: boolean;
+  allowUserInteraction?: boolean;
 }
 
 /**
@@ -68,6 +76,28 @@ export class TaskTool extends BaseDeclarativeTool<TaskParams, ToolResult> {
         subagent_type: {
           type: 'string',
           description: 'The type of specialized agent to use for this task',
+        },
+        interactive: {
+          type: 'boolean',
+          description:
+            'Run in interactive mode with bidirectional messaging. Default: true',
+        },
+        autoSwitch: {
+          type: 'boolean',
+          description: 'Automatically switch UI to new session. Default: true',
+        },
+        maxDepth: {
+          type: 'number',
+          description: 'Maximum nesting depth for this session. Default: 3',
+        },
+        inheritContext: {
+          type: 'boolean',
+          description: 'Inherit context from parent session. Default: true',
+        },
+        allowUserInteraction: {
+          type: 'boolean',
+          description:
+            'Allow user to send messages to this session. Default: true',
         },
       },
       required: ['description', 'prompt', 'subagent_type'],
@@ -460,74 +490,134 @@ class TaskToolInvocation extends BaseToolInvocation<TaskParams, ToolResult> {
     signal?: AbortSignal,
     updateOutput?: (output: ToolResultDisplay) => void,
   ): Promise<ToolResult> {
+    // Initialize display state
+    this.currentDisplay = {
+      type: 'task_execution',
+      subagentName: this.params.subagent_type,
+      taskDescription: this.params.description,
+      taskPrompt: this.params.prompt,
+      status: 'running',
+      toolCalls: [],
+    } as TaskResultDisplay;
+    this.currentToolCalls = this.currentDisplay.toolCalls || [];
+
+    // Setup event listeners for real-time updates
+    this.setupEventListeners(updateOutput);
+
     try {
-      // Load the subagent configuration
+      // Get SessionManager and defaults from config
+      const sessionManager = this.config.getSessionManager();
+      const defaults = this.config.getDefaultSubagentSessionConfig();
+
+      // Determine parent session (if any)
+      const parentSessionId = sessionManager.getActiveSessionId();
+
+      // Create session configuration
+      const sessionConfig: SubagentSessionConfig = {
+        interactive: this.params.interactive ?? defaults.interactive,
+        maxDepth: this.params.maxDepth ?? defaults.maxDepth,
+        autoSwitch: this.params.autoSwitch ?? defaults.autoSwitch,
+        inheritContext: this.params.inheritContext ?? defaults.inheritContext,
+        allowUserInteraction:
+          this.params.allowUserInteraction ?? defaults.allowUserInteraction,
+      };
+
+      // Create new session
+      const sessionId = await sessionManager.createSession({
+        name: this.params.subagent_type,
+        subagentName: this.params.subagent_type,
+        parentId: parentSessionId,
+        sessionConfig,
+        taskPrompt: this.params.prompt,
+      });
+
+      // Load subagent configuration
       const subagentConfig = await this.subagentManager.loadSubagent(
         this.params.subagent_type,
       );
 
       if (!subagentConfig) {
-        const errorDisplay = {
-          type: 'task_execution' as const,
-          subagentName: this.params.subagent_type,
-          taskDescription: this.params.description,
-          taskPrompt: this.params.prompt,
-          status: 'failed' as const,
-          terminateReason: `Subagent "${this.params.subagent_type}" not found`,
-        };
-
         return {
+          error: {
+            message: `Subagent "${this.params.subagent_type}" not found`,
+            type: ToolErrorType.TOOL_NOT_REGISTERED,
+          },
           llmContent: `Subagent "${this.params.subagent_type}" not found`,
-          returnDisplay: errorDisplay,
+          returnDisplay: {
+            ...this.currentDisplay,
+            status: 'failed',
+          } as TaskResultDisplay,
         };
       }
 
-      // Initialize the current display state
-      this.currentDisplay = {
-        type: 'task_execution' as const,
-        subagentName: subagentConfig.name,
-        taskDescription: this.params.description,
-        taskPrompt: this.params.prompt,
-        status: 'running' as const,
-        subagentColor: subagentConfig.color,
-      };
-
-      // Set up event listeners for real-time updates
-      this.setupEventListeners(updateOutput);
-
-      // Send initial display
-      if (updateOutput) {
-        updateOutput(this.currentDisplay);
-      }
+      // Create subagent scope
       const subagentScope = await this.subagentManager.createSubagentScope(
         subagentConfig,
         this.config,
         { eventEmitter: this.eventEmitter },
       );
 
-      // Create context state with the task prompt
+      // Prepare context
       const contextState = new ContextState();
       contextState.set('task_prompt', this.params.prompt);
+      contextState.set('task_description', this.params.description);
 
-      // Execute the subagent (blocking)
-      await subagentScope.runNonInteractive(contextState, signal);
+      // Copy parent context if inheritance is enabled
+      // Note: Context inheritance would require SessionManager.getContext() implementation
+      // For now, we skip this as it's an advanced feature
 
-      // Get the results
-      const finalText = subagentScope.getFinalText();
-      const terminateMode = subagentScope.getTerminateMode();
-      const success = terminateMode === SubagentTerminateMode.GOAL;
-      const executionSummary = subagentScope.getExecutionSummary();
+      // Execute based on mode
+      if (sessionConfig.interactive) {
+        // INTERACTIVE MODE
 
-      if (signal?.aborted) {
+        // Bind scope to session
+        sessionManager.bindScope(sessionId, subagentScope);
+
+        // Start interactive execution (non-blocking)
+        void subagentScope.runInteractive(contextState, {
+          sessionId,
+          externalSignal: signal,
+        });
+
+        // Update display
         this.updateDisplay(
           {
-            status: 'cancelled',
-            terminateReason: 'Task was cancelled by user',
-            executionSummary,
+            status: 'running',
           },
           updateOutput,
         );
+
+        // Return immediately with session info
+        return {
+          llmContent: `Started interactive session '${this.params.subagent_type}' (ID: ${sessionId})`,
+          returnDisplay: {
+            ...this.currentDisplay,
+            status: 'running',
+          } as TaskResultDisplay,
+        };
       } else {
+        // NON-INTERACTIVE MODE
+
+        this.updateDisplay(
+          {
+            status: 'running',
+          },
+          updateOutput,
+        );
+
+        // Run and wait for completion
+        await subagentScope.runNonInteractive(contextState, signal);
+
+        // Get result
+        const finalText = subagentScope.getFinalText();
+        const terminateMode = subagentScope.getTerminateMode();
+        const success = terminateMode === SubagentTerminateMode.GOAL;
+        const executionSummary = subagentScope.getExecutionSummary();
+
+        // Complete session
+        sessionManager.complete(sessionId, finalText);
+
+        // Update display
         this.updateDisplay(
           {
             status: success ? 'completed' : 'failed',
@@ -537,26 +627,34 @@ class TaskToolInvocation extends BaseToolInvocation<TaskParams, ToolResult> {
           },
           updateOutput,
         );
-      }
 
-      return {
-        llmContent: [{ text: finalText }],
-        returnDisplay: this.currentDisplay!,
-      };
+        // Return result
+        return {
+          llmContent: finalText || 'Task completed with no output',
+          returnDisplay: {
+            ...this.currentDisplay,
+            status: success ? 'completed' : 'failed',
+            result: finalText,
+            executionSummary,
+          } as TaskResultDisplay,
+        };
+      }
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : String(error);
-      console.error(`[TaskTool] Error running subagent: ${errorMessage}`);
 
-      const errorDisplay: TaskResultDisplay = {
-        ...this.currentDisplay!,
-        status: 'failed',
-        terminateReason: `Failed to run subagent: ${errorMessage}`,
-      };
+      this.updateDisplay(
+        {
+          status: 'failed',
+          terminateReason: errorMessage,
+        },
+        updateOutput,
+      );
 
       return {
-        llmContent: `Failed to run subagent: ${errorMessage}`,
-        returnDisplay: errorDisplay,
+        error: { message: errorMessage, type: ToolErrorType.EXECUTION_FAILED },
+        llmContent: `Task execution failed: ${errorMessage}`,
+        returnDisplay: this.currentDisplay!,
       };
     }
   }

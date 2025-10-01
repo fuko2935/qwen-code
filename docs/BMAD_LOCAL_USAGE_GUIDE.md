@@ -8,27 +8,30 @@ BMAD Expert Mode başarıyla build edildi ve lokal olarak kullanıma hazır!
 
 ## 📦 Paket Durumu
 
-| Durum | Açıklama |
-|-------|----------|
-| ✅ **Build Başarılı** | TypeScript derleme tamamlandı |
-| ✅ **Testler Geçti** | 42/42 test başarılı (%100) |
-| ✅ **npm link Aktif** | Lokal binary hazır |
-| ✅ **Production Ready** | Kullanıma hazır |
+| Durum                   | Açıklama                      |
+| ----------------------- | ----------------------------- |
+| ✅ **Build Başarılı**   | TypeScript derleme tamamlandı |
+| ✅ **Testler Geçti**    | 42/42 test başarılı (%100)    |
+| ✅ **npm link Aktif**   | Lokal binary hazır            |
+| ✅ **Production Ready** | Kullanıma hazır               |
 
 ---
 
 ## 🎯 Lokal Olarak Kullanım
 
 ### 1. Terminal'i Yeniden Başlat
+
 npm link sonrası terminali kapatıp tekrar açın (PATH güncellenmesi için).
 
 ### 2. Qwen Code'u Çalıştır
+
 ```powershell
 # Herhangi bir dizinde
 qwen
 ```
 
 ### 3. BMAD Modunu Etkinleştir
+
 ```powershell
 # Qwen içinde
 /mode
@@ -40,6 +43,7 @@ qwen
 ### 4. BMAD Komutlarını Kullan
 
 #### Full Workflow (Orchestrator)
+
 ```powershell
 qwen
 /bmad-orchestrator
@@ -49,6 +53,7 @@ qwen
 ```
 
 #### Bireysel Ajanlar
+
 ```powershell
 # PRD oluştur
 /bmad-pm
@@ -101,22 +106,26 @@ proje-dizini/
 ## 🔧 Özellikler
 
 ### ✅ Error Handling
+
 - Akıllı hata yönetimi
 - Otomatik retry (3 level)
 - User guidance desteği
 
 ### ✅ Transaction System
+
 - Atomic file operations
 - Rollback on failure
 - Checkpoint support
 
 ### ✅ Logging
+
 - Structured logs
 - Secret redaction
 - Correlation ID tracking
 - Log level: `$env:QWEN_BMAD_LOG_LEVEL="debug"`
 
 ### ✅ Session Management
+
 - Otomatik kaydetme
 - Resume capability
 - Interrupt recovery
@@ -126,11 +135,13 @@ proje-dizini/
 ## 🎮 Komutlar
 
 ### Mode Yönetimi
+
 ```powershell
 /mode                  # Mode seçimi
 ```
 
 ### BMAD Ajanları
+
 ```powershell
 /bmad-orchestrator     # Full automation
 /bmad-analyst          # İlk analiz
@@ -148,6 +159,7 @@ proje-dizini/
 ## 🔍 Debug ve İzleme
 
 ### Log Seviyesi Ayarla
+
 ```powershell
 # DEBUG logs göster
 $env:QWEN_BMAD_LOG_LEVEL = "debug"
@@ -155,6 +167,7 @@ qwen
 ```
 
 ### Log Dosyasını İncele
+
 ```powershell
 # Real-time log monitoring
 Get-Content .qwen\logs\bmad.log -Wait
@@ -167,6 +180,7 @@ Select-String -Path .qwen\logs\bmad.log -Pattern "error"
 ```
 
 ### Session Durumunu Kontrol Et
+
 ```powershell
 # Session dosyasını oku
 Get-Content .qwen\bmad-session.json | ConvertFrom-Json
@@ -177,7 +191,9 @@ Get-Content .qwen\bmad-session.json | ConvertFrom-Json
 ## 🐛 Sorun Giderme
 
 ### Problem: "qwen" komutu bulunamıyor
+
 **Çözüm**:
+
 ```powershell
 # Terminal'i yeniden başlat
 # veya
@@ -186,7 +202,9 @@ npm link
 ```
 
 ### Problem: BMAD komutları çalışmıyor
+
 **Çözüm**:
+
 ```powershell
 # Mode'u kontrol et
 /mode
@@ -198,7 +216,9 @@ npm link
 ```
 
 ### Problem: Session corrupted
+
 **Çözüm**:
+
 ```powershell
 # Session dosyasını temizle
 Remove-Item .qwen\bmad-session.json -ErrorAction SilentlyContinue
@@ -209,8 +229,10 @@ qwen
 ```
 
 ### Problem: Transaction failed
+
 **Çözüm**:
 Sistem otomatik rollback yapar. Logları kontrol edin:
+
 ```powershell
 Get-Content .qwen\logs\bmad.log -Tail 100
 ```
@@ -220,18 +242,21 @@ Get-Content .qwen\logs\bmad.log -Tail 100
 ## 📊 Performans İpuçları
 
 ### 1. Temp Dosyalarını Temizle
+
 ```powershell
 # Transaction temp files
 Remove-Item .qwen\transactions\* -Recurse -Force -ErrorAction SilentlyContinue
 ```
 
 ### 2. Log Dosyası Rotate
+
 ```powershell
 # Eski logları yedekle
 Move-Item .qwen\logs\bmad.log .qwen\logs\bmad-backup.log -ErrorAction SilentlyContinue
 ```
 
 ### 3. Cache Temizle (Gerekirse)
+
 ```powershell
 # Node modules cache
 npm cache clean --force
@@ -242,6 +267,7 @@ npm cache clean --force
 ## 🎯 Örnek Kullanım Senaryoları
 
 ### Senaryo 1: Yeni Proje (Greenfield)
+
 ```powershell
 # 1. Yeni dizin oluştur
 mkdir my-new-project
@@ -276,6 +302,7 @@ qwen
 ```
 
 ### Senaryo 2: Mevcut Proje (Brownfield)
+
 ```powershell
 # 1. Mevcut proje dizinine git
 cd existing-project
@@ -288,6 +315,7 @@ qwen
 ```
 
 ### Senaryo 3: Kesintiye Uğrayan İş
+
 ```powershell
 # 1. Workflow başlat
 qwen
@@ -307,15 +335,18 @@ qwen
 ## 🔐 Güvenlik
 
 ### Secret Redaction
+
 Tüm API keys, tokens, ve passwords otomatik olarak loglardan temizlenir.
 
 **Örnek**:
+
 ```
 Input:  "API key is sk_live_1234567890abcdef"
 Log:    "API key is [REDACTED]"
 ```
 
 ### Desteklenen Secret Patterns:
+
 - ✅ API keys (`api_key=...`)
 - ✅ Tokens (`token=...`)
 - ✅ Passwords (`password=...`)
@@ -326,12 +357,14 @@ Log:    "API key is [REDACTED]"
 ## 📈 Monitoring
 
 ### Workflow İlerlemesini İzle
+
 ```powershell
 # Başka bir terminal'de real-time log
 Get-Content .qwen\logs\bmad.log -Wait | Select-String "✅|❌|🔄"
 ```
 
 ### Artifact Oluşumunu İzle
+
 ```powershell
 # docs/ klasörünü izle
 Get-ChildItem docs\ -Recurse | Select-Object FullName, LastWriteTime
@@ -342,6 +375,7 @@ Get-ChildItem docs\ -Recurse | Select-Object FullName, LastWriteTime
 ## 🎓 İleri Seviye
 
 ### Custom Agents Tanımla
+
 ```powershell
 # .bmad-core/agents/my-agent.md oluştur
 mkdir .bmad-core\agents
@@ -356,6 +390,7 @@ You are a specialized developer focusing on...
 ```
 
 ### Custom Tasks Ekle
+
 ```powershell
 # .bmad-core/tasks/my-task.md oluştur
 mkdir .bmad-core\tasks
@@ -375,12 +410,14 @@ Task instructions here...
 ## 📚 Ek Kaynaklar
 
 ### Dokümantasyon
+
 - **BMAD_INTEGRATION.md** - Kullanıcı kılavuzu
 - **IMPLEMENTATION_SUMMARY.md** - Teknik detaylar
 - **BMAD_COMPLETE.md** - Full system docs
 - **TEST_RESULTS_SUMMARY.md** - Test raporları
 
 ### Test Sonuçları
+
 ```powershell
 # Testleri çalıştır
 cd C:\Users\mansi\new\qwen\qwen-code\packages\cli
@@ -406,6 +443,7 @@ Başlamadan önce kontrol edin:
 **BMAD Expert Mode kullanıma hazır! 🚀**
 
 Şimdi:
+
 1. Terminal'i yeniden başlatın
 2. `qwen` yazın
 3. `/mode` ile BMAD Expert Mode'u aktive edin

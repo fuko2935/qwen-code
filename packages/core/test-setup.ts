@@ -21,9 +21,20 @@ if (typeof (globalThis as unknown as { File?: unknown }).File === 'undefined') {
 }
 
 // Force consistent number formatting in tests regardless of system locale
-const originalToLocaleString = Number.prototype.toLocaleString as (this: number, locales?: string | string[], options?: Intl.NumberFormatOptions) => string;
-Number.prototype.toLocaleString = function (locales?: string | string[], options?: Intl.NumberFormatOptions) {
+const originalToLocaleString = Number.prototype.toLocaleString as (
+  this: number,
+  locales?: string | string[],
+  options?: Intl.NumberFormatOptions,
+) => string;
+Number.prototype.toLocaleString = function (
+  locales?: string | string[],
+  options?: Intl.NumberFormatOptions,
+) {
   const forcedLocales = locales ?? 'en-US';
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return originalToLocaleString.call(this as any, forcedLocales as any, options as any);
+  return originalToLocaleString.call(
+    this as any,
+    forcedLocales as any,
+    options as any,
+  );
 };

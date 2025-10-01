@@ -23,6 +23,8 @@ import {
 } from '../services/fileSystemService.js';
 import { GitService } from '../services/gitService.js';
 import { SubagentManager } from '../subagents/subagent-manager.js';
+import { SessionManager } from '../session/SessionManager.js';
+import type { SubagentSessionConfig } from '../session/types.js';
 import type { TelemetryTarget } from '../telemetry/index.js';
 import {
   DEFAULT_OTLP_ENDPOINT,
@@ -251,6 +253,7 @@ export class Config {
   private toolRegistry!: ToolRegistry;
   private promptRegistry!: PromptRegistry;
   private subagentManager!: SubagentManager;
+  private sessionManager?: SessionManager;
   private sessionId: string;
   private fileSystemService: FileSystemService;
   private contentGeneratorConfig!: ContentGeneratorConfig;
@@ -1001,6 +1004,34 @@ export class Config {
 
   getSubagentManager(): SubagentManager {
     return this.subagentManager;
+  }
+
+  /**
+   * Gets the SessionManager singleton for hierarchical session management.
+   * Lazily initializes on first access.
+   *
+   * Note: Event bridging to UI should be done in the UI layer (App.tsx)
+   * by subscribing to sessionManager.on() and forwarding to UI event system.
+   */
+  getSessionManager(): SessionManager {
+    if (!this.sessionManager) {
+      this.sessionManager = new SessionManager();
+    }
+    return this.sessionManager;
+  }
+
+  /**
+   * Gets default configuration for subagent sessions.
+   * Interactive mode is now enabled by default for better user interaction.
+   */
+  getDefaultSubagentSessionConfig(): SubagentSessionConfig {
+    return {
+      interactive: true,
+      maxDepth: 3,
+      autoSwitch: true,
+      inheritContext: true,
+      allowUserInteraction: true,
+    };
   }
 
   async createToolRegistry(): Promise<ToolRegistry> {

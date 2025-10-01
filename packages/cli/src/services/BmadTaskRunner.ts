@@ -7,7 +7,8 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
-import { load as yamlLoad } from 'js-yaml';
+// @ts-expect-error - js-yaml types
+import yaml from 'js-yaml';
 import type {
   TaskContext,
   TaskResult,
@@ -93,7 +94,7 @@ export class BmadTaskRunner {
     const yamlMatch = content.match(/```yaml\n([\s\S]*?)\n```/);
     if (yamlMatch) {
       try {
-        const parsed = yamlLoad(yamlMatch[1]) as Record<string, unknown>;
+        const parsed = (yaml as any).load(yamlMatch[1]) as Record<string, unknown>;
 
         return {
           id: path.basename(taskPath, '.md'),
@@ -138,7 +139,7 @@ export class BmadTaskRunner {
     // Parse YAML template
     let templateData: Record<string, unknown>;
     try {
-      templateData = yamlLoad(content) as Record<string, unknown>;
+      templateData = (yaml as any).load(content) as Record<string, unknown>;
     } catch (error) {
       throw new Error(
         `Failed to parse template YAML: ${error instanceof Error ? error.message : String(error)}`,

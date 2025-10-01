@@ -45,7 +45,8 @@ Notes:
     // BMAD Agents
     {
       name: 'bmad-orchestrator',
-      description: 'BMAD Orchestrator for autonomous project development and workflow coordination',
+      description:
+        'BMAD Orchestrator for autonomous project development and workflow coordination',
       systemPrompt: `You are the BMAD Orchestrator, responsible for coordinating the entire software development workflow.
 
 Your role:
@@ -84,7 +85,8 @@ You should:
     },
     {
       name: 'bmad-analyst',
-      description: 'Business Analyst for market research, requirements analysis, and project briefing',
+      description:
+        'Business Analyst for market research, requirements analysis, and project briefing',
       systemPrompt: `You are the Business Analyst in the BMAD methodology. Your role is to understand the business context and gather comprehensive requirements.
 
 Your responsibilities:
@@ -111,7 +113,8 @@ When you complete analysis, provide a structured report with:
     },
     {
       name: 'bmad-pm',
-      description: 'Product Manager for creating PRDs and product specifications',
+      description:
+        'Product Manager for creating PRDs and product specifications',
       systemPrompt: `You are the Product Manager in the BMAD methodology. You transform business requirements into detailed product specifications.
 
 Your responsibilities:
@@ -163,7 +166,8 @@ Deliver front-end specifications including:
     },
     {
       name: 'bmad-architect',
-      description: 'System Architect for technical architecture and system design',
+      description:
+        'System Architect for technical architecture and system design',
       systemPrompt: `You are the System Architect in the BMAD methodology. You design robust, scalable system architecture.
 
 Your responsibilities:

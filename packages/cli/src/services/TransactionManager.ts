@@ -208,7 +208,7 @@ export class TransactionManager {
             throw new FileOperationError(
               'write',
               operation.targetPath,
-              new Error(`Unknown operation type: ${(operation as any).type}`),
+              new Error(`Unknown operation type: ${(operation as { type: string }).type}`),
             );
         }
       } catch (error) {
@@ -341,7 +341,7 @@ export class TransactionManager {
               throw new FileOperationError(
                 'write',
                 operation.targetPath,
-                new Error(`Unknown operation type: ${(operation as any).type}`),
+                new Error(`Unknown operation type: ${(operation as { type: string }).type}`),
               );
           }
           committedFiles.push(operation.targetPath);
@@ -418,7 +418,7 @@ export class TransactionManager {
   private async commitDelete(operation: FileOperation): Promise<void> {
     try {
       await fs.unlink(operation.targetPath);
-    } catch (error) {
+    } catch (_error) {
       // File might already be deleted
       console.warn(`Could not delete file: ${operation.targetPath}`);
     }

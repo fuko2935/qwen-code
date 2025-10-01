@@ -181,7 +181,7 @@ class ShellToolInvocation extends BaseToolInvocation<
       if (signal.aborted) {
         abortedBy = 'user';
         try {
-          // @ts-expect-error reason propagation may not exist everywhere
+          // @ts-ignore reason propagation may not exist everywhere
           composedController.abort(signal.reason);
         } catch {
           composedController.abort();
@@ -191,7 +191,7 @@ class ShellToolInvocation extends BaseToolInvocation<
           if (!composedController.signal.aborted) {
             abortedBy = abortedBy ?? 'user';
             try {
-              // @ts-expect-error propagate reason if available
+              // @ts-ignore propagate reason if available
               composedController.abort(signal.reason);
             } catch {
               composedController.abort();

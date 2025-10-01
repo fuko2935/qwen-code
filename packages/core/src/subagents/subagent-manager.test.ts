@@ -903,7 +903,14 @@ System prompt 3`);
 
       const names = subagents.map((s) => s.name);
       // Should include expected agents, but allow additional built-ins
-      expect(names).toEqual(expect.arrayContaining(['agent1', 'agent2', 'agent3', 'general-purpose']));
+      expect(names).toEqual(
+        expect.arrayContaining([
+          'agent1',
+          'agent2',
+          'agent3',
+          'general-purpose',
+        ]),
+      );
     });
 
     it('should prioritize project level over user level', async () => {
@@ -932,7 +939,14 @@ System prompt 3`);
       const sorted = [...names].sort((a, b) => a.localeCompare(b));
       expect(names).toEqual(sorted);
       // And should include expected agents among the results
-      expect(names).toEqual(expect.arrayContaining(['agent1', 'agent2', 'agent3', 'general-purpose']));
+      expect(names).toEqual(
+        expect.arrayContaining([
+          'agent1',
+          'agent2',
+          'agent3',
+          'general-purpose',
+        ]),
+      );
     });
 
     it('should handle empty directories', async () => {
@@ -945,7 +959,11 @@ System prompt 3`);
 
       // Only built-in agents remain; allow multiple built-ins
       expect(subagents.length).toBeGreaterThanOrEqual(1);
-      expect(subagents.some((s) => s.name === 'general-purpose' && s.level === 'builtin')).toBe(true);
+      expect(
+        subagents.some(
+          (s) => s.name === 'general-purpose' && s.level === 'builtin',
+        ),
+      ).toBe(true);
     });
 
     it('should handle directory read errors', async () => {
@@ -957,7 +975,11 @@ System prompt 3`);
 
       // Only built-in agents remain; allow multiple built-ins
       expect(subagents.length).toBeGreaterThanOrEqual(1);
-      expect(subagents.some((s) => s.name === 'general-purpose' && s.level === 'builtin')).toBe(true);
+      expect(
+        subagents.some(
+          (s) => s.name === 'general-purpose' && s.level === 'builtin',
+        ),
+      ).toBe(true);
     });
   });
 

@@ -78,7 +78,6 @@ vi.mock('../ui/commands/bmad/index.js', () => ({
   initializeBmadCommands: vi.fn().mockResolvedValue(undefined),
 }));
 
-
 describe('BuiltinCommandLoader', () => {
   let mockConfig: Config;
 

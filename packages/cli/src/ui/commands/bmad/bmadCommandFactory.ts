@@ -4,9 +4,13 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import type { SlashCommand, CommandContext, MessageActionReturn } from '../types.js';
+import type {
+  SlashCommand,
+  CommandContext,
+  MessageActionReturn,
+} from '../types.js';
 import { CommandKind } from '../types.js';
-import { AgentId } from '../../../config/bmadConfig.js';
+import type { AgentId } from '../../../config/bmadConfig.js';
 import { BmadService } from '../../../services/BmadService.js';
 import type { Config } from '@qwen-code/qwen-code-core';
 
@@ -16,7 +20,10 @@ let bmadServiceInstance: BmadService | null = null;
 /**
  * Initialize BMAD service
  */
-export function initializeBmadService(cwd: string, config: Config): BmadService {
+export function initializeBmadService(
+  cwd: string,
+  config: Config,
+): BmadService {
   if (!bmadServiceInstance) {
     bmadServiceInstance = new BmadService(cwd, config);
   }
@@ -36,7 +43,7 @@ export function getBmadService(): BmadService | null {
 export function createBmadAgentCommand(
   agentId: AgentId,
   agentName: string,
-  description: string
+  description: string,
 ): SlashCommand {
   return {
     name: `bmad-${agentId}`,
@@ -49,7 +56,8 @@ export function createBmadAgentCommand(
         return {
           type: 'message',
           messageType: 'error',
-          content: 'BMAD service not initialized. Please enable BMAD Expert Mode first with /mode',
+          content:
+            'BMAD service not initialized. Please enable BMAD Expert Mode first with /mode',
         };
       }
 
@@ -57,7 +65,8 @@ export function createBmadAgentCommand(
         return {
           type: 'message',
           messageType: 'error',
-          content: 'BMAD service not initialized. Please restart Qwen Code in BMAD Expert Mode.',
+          content:
+            'BMAD service not initialized. Please restart Qwen Code in BMAD Expert Mode.',
         };
       }
 
@@ -96,7 +105,8 @@ export function createOrchestratorCommand(): SlashCommand {
   return {
     name: 'bmad-orchestrator',
     altNames: ['bmad'],
-    description: 'Activate BMAD Orchestrator for autonomous project development',
+    description:
+      'Activate BMAD Orchestrator for autonomous project development',
     kind: CommandKind.BUILT_IN,
     action: async (context: CommandContext): Promise<MessageActionReturn> => {
       const bmadService = getBmadService();
@@ -105,7 +115,8 @@ export function createOrchestratorCommand(): SlashCommand {
         return {
           type: 'message',
           messageType: 'error',
-          content: 'BMAD service not initialized. Please enable BMAD Expert Mode first with /mode',
+          content:
+            'BMAD service not initialized. Please enable BMAD Expert Mode first with /mode',
         };
       }
 
@@ -113,7 +124,8 @@ export function createOrchestratorCommand(): SlashCommand {
         return {
           type: 'message',
           messageType: 'error',
-          content: 'BMAD service not initialized. Please restart Qwen Code in BMAD Expert Mode.',
+          content:
+            'BMAD service not initialized. Please restart Qwen Code in BMAD Expert Mode.',
         };
       }
 
@@ -128,7 +140,8 @@ export function createOrchestratorCommand(): SlashCommand {
           await bmadService.persistStep({
             mode: 'bmad-expert' as any,
             projectType: existing?.projectType ?? 'greenfield',
-            currentPhase: (await import('../../../config/bmadConfig.js')).WorkflowPhase.INIT,
+            currentPhase: (await import('../../../config/bmadConfig.js'))
+              .WorkflowPhase.INIT,
             currentAgent: null,
             context: {
               ...(existing?.context || {}),
@@ -147,7 +160,8 @@ export function createOrchestratorCommand(): SlashCommand {
           return {
             type: 'message',
             messageType: 'info',
-            content: '🎭 Orchestrator: İş akışı başlatıldı ve görevler alt ajanlara delege ediliyor. İlerleme günlükleri üstte görüntülenir.',
+            content:
+              '🎭 Orchestrator: İş akışı başlatıldı ve görevler alt ajanlara delege ediliyor. İlerleme günlükleri üstte görüntülenir.',
           };
         } catch (error) {
           return {
@@ -208,14 +222,15 @@ export function createResumeCommand(): SlashCommand {
           return {
             type: 'message',
             messageType: 'info',
-            content: 'No workflow to resume. Start a new project with /bmad-orchestrator',
+            content:
+              'No workflow to resume. Start a new project with /bmad-orchestrator',
           };
         }
 
         return {
           type: 'message',
           messageType: 'info',
-          content: 
+          content:
             `✅ Workflow resumed!\n\n` +
             `Phase: ${session.currentPhase}\n` +
             `Current Agent: ${session.currentAgent || 'None'}\n` +
@@ -259,13 +274,19 @@ export function createStatusCommand(): SlashCommand {
           return {
             type: 'message',
             messageType: 'info',
-            content: 'No active BMAD workflow. Start one with /bmad-orchestrator',
+            content:
+              'No active BMAD workflow. Start one with /bmad-orchestrator',
           };
         }
 
         const artifacts = Object.entries(session.artifacts)
-          .filter(([_, value]) => Array.isArray(value) ? value.length > 0 : value)
-          .map(([key, value]) => `  - ${key}: ${Array.isArray(value) ? value.length : 1}`)
+          .filter(([_, value]) =>
+            Array.isArray(value) ? value.length > 0 : value,
+          )
+          .map(
+            ([key, value]) =>
+              `  - ${key}: ${Array.isArray(value) ? value.length : 1}`,
+          )
           .join('\n');
 
         return {
@@ -318,11 +339,12 @@ export function createAgentsCommand(): SlashCommand {
           return {
             type: 'message',
             messageType: 'info',
-            content: 'No agents found. Make sure .bmad-core/agents/ directory exists.',
+            content:
+              'No agents found. Make sure .bmad-core/agents/ directory exists.',
           };
         }
 
-        const agentList = agents.map(id => `  /bmad-${id}`).join('\n');
+        const agentList = agents.map((id) => `  /bmad-${id}`).join('\n');
 
         return {
           type: 'message',

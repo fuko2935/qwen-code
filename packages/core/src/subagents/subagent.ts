@@ -874,7 +874,11 @@ export class SubAgentScope {
                 // ALSO emit to SessionManager for UI bridging
                 const sessionManager = this.runtimeContext.getSessionManager();
                 // SessionManager has a private emit method, access via unknown cast
-                (sessionManager as unknown as { emit: (event: unknown) => void }).emit({
+                (
+                  sessionManager as unknown as {
+                    emit: (event: unknown) => void;
+                  }
+                ).emit({
                   type: 'SUBAGENT_MESSAGE_TO_USER',
                   sessionId: this.sessionId!,
                   textChunk: txt,

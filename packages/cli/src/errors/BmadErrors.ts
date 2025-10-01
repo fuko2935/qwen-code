@@ -1,6 +1,6 @@
 /**
  * BMAD Error Handling System
- * 
+ *
  * Provides structured error types, error contexts, and base error classes
  * for robust error handling across BMAD workflows.
  */
@@ -26,45 +26,45 @@ export enum ErrorType {
   FILE_WRITE_FAILED = 'file_write_failed',
   FILE_READ_FAILED = 'file_read_failed',
   PERMISSION_DENIED = 'permission_denied',
-  
+
   // Agent errors
   AGENT_NOT_FOUND = 'agent_not_found',
   AGENT_LOAD_FAILED = 'agent_load_failed',
   AGENT_EXECUTION_FAILED = 'agent_execution_failed',
-  
+
   // Task errors
   TASK_NOT_FOUND = 'task_not_found',
   TASK_EXECUTION_FAILED = 'task_execution_failed',
   TASK_TIMEOUT = 'task_timeout',
-  
+
   // Template errors
   TEMPLATE_NOT_FOUND = 'template_not_found',
   TEMPLATE_RENDER_FAILED = 'template_render_failed',
   TEMPLATE_VALIDATION_FAILED = 'template_validation_failed',
-  
+
   // Session errors
   SESSION_CORRUPTED = 'session_corrupted',
   SESSION_WRITE_FAILED = 'session_write_failed',
   SESSION_LOAD_FAILED = 'session_load_failed',
-  
+
   // Workflow errors
   WORKFLOW_INTERRUPTED = 'workflow_interrupted',
   WORKFLOW_STEP_FAILED = 'workflow_step_failed',
   INVALID_WORKFLOW_STATE = 'invalid_workflow_state',
-  
+
   // Context errors
   CONTEXT_OVERFLOW = 'context_overflow',
   TOKEN_LIMIT_EXCEEDED = 'token_limit_exceeded',
-  
+
   // Validation errors
   INVALID_INPUT = 'invalid_input',
   MISSING_REQUIRED_FIELD = 'missing_required_field',
   VALIDATION_FAILED = 'validation_failed',
-  
+
   // Network/External errors
   NETWORK_ERROR = 'network_error',
   EXTERNAL_SERVICE_ERROR = 'external_service_error',
-  
+
   // Unknown
   UNKNOWN = 'unknown',
 }
@@ -97,17 +97,17 @@ export interface ErrorContext {
  * Base BMAD Error class
  */
 export class BmadError extends Error {
-  public readonly type: ErrorType;
-  public readonly severity: ErrorSeverity;
-  public readonly context: ErrorContext;
-  public readonly isRetryable: boolean;
+  readonly type: ErrorType;
+  readonly severity: ErrorSeverity;
+  readonly context: ErrorContext;
+  readonly isRetryable: boolean;
 
   constructor(
     message: string,
     type: ErrorType,
     severity: ErrorSeverity,
     context: Partial<ErrorContext> = {},
-    isRetryable = false
+    isRetryable = false,
   ) {
     super(message);
     this.name = 'BmadError';
@@ -123,7 +123,7 @@ export class BmadError extends Error {
     if (Error.captureStackTrace) {
       Error.captureStackTrace(this, this.constructor);
     }
-    
+
     this.context.stackTrace = this.stack;
   }
 
@@ -172,7 +172,7 @@ export class RecoverableError extends BmadError {
   constructor(
     message: string,
     type: ErrorType,
-    context: Partial<ErrorContext> = {}
+    context: Partial<ErrorContext> = {},
   ) {
     super(message, type, ErrorSeverity.RECOVERABLE, context, true);
     this.name = 'RecoverableError';
@@ -186,7 +186,7 @@ export class CriticalError extends BmadError {
   constructor(
     message: string,
     type: ErrorType,
-    context: Partial<ErrorContext> = {}
+    context: Partial<ErrorContext> = {},
   ) {
     super(message, type, ErrorSeverity.CRITICAL, context, false);
     this.name = 'CriticalError';
@@ -197,14 +197,20 @@ export class CriticalError extends BmadError {
  * Validation error - input data is invalid
  */
 export class ValidationError extends BmadError {
-  public readonly validationErrors: string[];
+  readonly validationErrors: string[];
 
   constructor(
     message: string,
     validationErrors: string[] = [],
-    context: Partial<ErrorContext> = {}
+    context: Partial<ErrorContext> = {},
   ) {
-    super(message, ErrorType.VALIDATION_FAILED, ErrorSeverity.WARNING, context, false);
+    super(
+      message,
+      ErrorType.VALIDATION_FAILED,
+      ErrorSeverity.WARNING,
+      context,
+      false,
+    );
     this.name = 'ValidationError';
     this.validationErrors = validationErrors;
   }
@@ -212,7 +218,7 @@ export class ValidationError extends BmadError {
   override toUserMessage(): string {
     const base = super.toUserMessage();
     if (this.validationErrors.length > 0) {
-      return `${base}\n\nValidation errors:\n${this.validationErrors.map(e => `  - ${e}`).join('\n')}`;
+      return `${base}\n\nValidation errors:\n${this.validationErrors.map((e) => `  - ${e}`).join('\n')}`;
     }
     return base;
   }
@@ -225,7 +231,7 @@ export class FileOperationError extends RecoverableError {
   constructor(
     operation: 'read' | 'write' | 'delete' | 'move',
     filePath: string,
-    originalError?: Error
+    originalError?: Error,
   ) {
     const typeMap = {
       read: ErrorType.FILE_READ_FAILED,
@@ -234,15 +240,11 @@ export class FileOperationError extends RecoverableError {
       move: ErrorType.FILE_WRITE_FAILED,
     };
 
-    super(
-      `Failed to ${operation} file: ${filePath}`,
-      typeMap[operation],
-      {
-        filePath,
-        originalError,
-        metadata: { operation },
-      }
-    );
+    super(`Failed to ${operation} file: ${filePath}`, typeMap[operation], {
+      filePath,
+      originalError,
+      metadata: { operation },
+    });
     this.name = 'FileOperationError';
   }
 }
@@ -256,7 +258,7 @@ export class AgentError extends BmadError {
     agentId: string,
     type: ErrorType = ErrorType.AGENT_EXECUTION_FAILED,
     severity: ErrorSeverity = ErrorSeverity.RECOVERABLE,
-    originalError?: Error
+    originalError?: Error,
   ) {
     super(
       message,
@@ -266,7 +268,7 @@ export class AgentError extends BmadError {
         agentId,
         originalError,
       },
-      severity === ErrorSeverity.RECOVERABLE
+      severity === ErrorSeverity.RECOVERABLE,
     );
     this.name = 'AgentError';
   }
@@ -280,7 +282,7 @@ export class TaskError extends RecoverableError {
     message: string,
     taskId: string,
     type: ErrorType = ErrorType.TASK_EXECUTION_FAILED,
-    originalError?: Error
+    originalError?: Error,
   ) {
     super(message, type, {
       taskId,
@@ -298,7 +300,7 @@ export class TemplateError extends RecoverableError {
     message: string,
     templateId: string,
     type: ErrorType = ErrorType.TEMPLATE_RENDER_FAILED,
-    originalError?: Error
+    originalError?: Error,
   ) {
     super(message, type, {
       metadata: { templateId },
@@ -315,7 +317,7 @@ export class SessionError extends CriticalError {
   constructor(
     message: string,
     type: ErrorType = ErrorType.SESSION_CORRUPTED,
-    originalError?: Error
+    originalError?: Error,
   ) {
     super(message, type, {
       originalError,
@@ -333,7 +335,7 @@ export class WorkflowError extends BmadError {
     step: string,
     type: ErrorType = ErrorType.WORKFLOW_STEP_FAILED,
     severity: ErrorSeverity = ErrorSeverity.RECOVERABLE,
-    originalError?: Error
+    originalError?: Error,
   ) {
     super(
       message,
@@ -343,7 +345,7 @@ export class WorkflowError extends BmadError {
         step,
         originalError,
       },
-      severity === ErrorSeverity.RECOVERABLE
+      severity === ErrorSeverity.RECOVERABLE,
     );
     this.name = 'WorkflowError';
   }
@@ -353,8 +355,8 @@ export class WorkflowError extends BmadError {
  * Context overflow error
  */
 export class ContextOverflowError extends RecoverableError {
-  public readonly currentTokens: number;
-  public readonly maxTokens: number;
+  readonly currentTokens: number;
+  readonly maxTokens: number;
 
   constructor(currentTokens: number, maxTokens: number) {
     super(
@@ -362,7 +364,7 @@ export class ContextOverflowError extends RecoverableError {
       ErrorType.TOKEN_LIMIT_EXCEEDED,
       {
         metadata: { currentTokens, maxTokens },
-      }
+      },
     );
     this.name = 'ContextOverflowError';
     this.currentTokens = currentTokens;
@@ -376,21 +378,22 @@ export class ContextOverflowError extends RecoverableError {
 export function wrapError(
   error: unknown,
   type: ErrorType = ErrorType.UNKNOWN,
-  context: Partial<ErrorContext> = {}
+  context: Partial<ErrorContext> = {},
 ): BmadError {
   if (error instanceof BmadError) {
     return error;
   }
 
-  const originalError = error instanceof Error ? error : new Error(String(error));
-  
+  const originalError =
+    error instanceof Error ? error : new Error(String(error));
+
   return new RecoverableError(
     originalError.message || 'Unknown error occurred',
     type,
     {
       ...context,
       originalError,
-    }
+    },
   );
 }
 

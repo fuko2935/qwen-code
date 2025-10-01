@@ -57,15 +57,13 @@ export const ModeSelectionDialog: React.FC<ModeSelectionDialogProps> = ({
     { isActive: true },
   );
 
-  const options: Array<RadioSelectItem<BmadMode>> = MODE_OPTIONS.map(
-    (mode) => {
-      const currentIndicator = mode.id === currentMode ? ' (current)' : '';
-      return {
-        label: `${mode.icon} ${mode.label}${currentIndicator} - ${mode.description}`,
-        value: mode.id,
-      };
-    },
-  );
+  const options: Array<RadioSelectItem<BmadMode>> = MODE_OPTIONS.map((mode) => {
+    const currentIndicator = mode.id === currentMode ? ' (current)' : '';
+    return {
+      label: `${mode.icon} ${mode.label}${currentIndicator} - ${mode.description}`,
+      value: mode.id,
+    };
+  });
 
   const initialIndex = Math.max(
     0,

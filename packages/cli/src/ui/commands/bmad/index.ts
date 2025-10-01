@@ -43,14 +43,46 @@ export const bmadCommands: SlashCommand[] = [
   createOrchestratorCommand(),
 
   // Agent commands
-  createBmadAgentCommand(AgentId.ANALYST, 'Business Analyst', 'Activate Business Analyst for market research and project briefing'),
-  createBmadAgentCommand(AgentId.PM, 'Product Manager', 'Activate Product Manager for creating PRDs and product strategy'),
-  createBmadAgentCommand(AgentId.ARCHITECT, 'Architect', 'Activate Architect for system design and architecture'),
-  createBmadAgentCommand(AgentId.UX, 'UX Expert', 'Activate UX Expert for UI/UX design and front-end specifications'),
-  createBmadAgentCommand(AgentId.PO, 'Product Owner', 'Activate Product Owner for backlog management and story refinement'),
-  createBmadAgentCommand(AgentId.SM, 'Scrum Master', 'Activate Scrum Master for story creation and sprint management'),
-  createBmadAgentCommand(AgentId.DEV, 'Developer', 'Activate Developer for code implementation and testing'),
-  createBmadAgentCommand(AgentId.QA, 'QA Engineer', 'Activate QA Engineer for test architecture and quality assurance'),
+  createBmadAgentCommand(
+    AgentId.ANALYST,
+    'Business Analyst',
+    'Activate Business Analyst for market research and project briefing',
+  ),
+  createBmadAgentCommand(
+    AgentId.PM,
+    'Product Manager',
+    'Activate Product Manager for creating PRDs and product strategy',
+  ),
+  createBmadAgentCommand(
+    AgentId.ARCHITECT,
+    'Architect',
+    'Activate Architect for system design and architecture',
+  ),
+  createBmadAgentCommand(
+    AgentId.UX,
+    'UX Expert',
+    'Activate UX Expert for UI/UX design and front-end specifications',
+  ),
+  createBmadAgentCommand(
+    AgentId.PO,
+    'Product Owner',
+    'Activate Product Owner for backlog management and story refinement',
+  ),
+  createBmadAgentCommand(
+    AgentId.SM,
+    'Scrum Master',
+    'Activate Scrum Master for story creation and sprint management',
+  ),
+  createBmadAgentCommand(
+    AgentId.DEV,
+    'Developer',
+    'Activate Developer for code implementation and testing',
+  ),
+  createBmadAgentCommand(
+    AgentId.QA,
+    'QA Engineer',
+    'Activate QA Engineer for test architecture and quality assurance',
+  ),
 
   // Utility commands
   createResumeCommand(),

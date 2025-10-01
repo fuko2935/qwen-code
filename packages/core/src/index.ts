@@ -76,6 +76,10 @@ export * from './tools/tool-registry.js';
 // Export subagents (Phase 1)
 export * from './subagents/index.js';
 
+// Export session management
+export * from './session/types.js';
+export * from './session/SessionManager.js';
+
 // Export prompt logic
 export * from './prompts/mcp-prompts.js';
 

@@ -8,7 +8,12 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import type { SessionState } from '../config/bmadConfig.js';
-import { BmadPaths, BMAD_CONFIG, WorkflowPhase, AgentId } from '../config/bmadConfig.js';
+import {
+  BmadPaths,
+  BMAD_CONFIG,
+  WorkflowPhase,
+  AgentId,
+} from '../config/bmadConfig.js';
 
 /**
  * Manages BMAD session state persistence and recovery
@@ -35,7 +40,7 @@ export class BmadSessionManager {
         return null;
       }
       throw new Error(
-        `Failed to read session file: ${error instanceof Error ? error.message : String(error)}`
+        `Failed to read session file: ${error instanceof Error ? error.message : String(error)}`,
       );
     }
   }
@@ -45,7 +50,7 @@ export class BmadSessionManager {
    */
   async write(state: SessionState): Promise<void> {
     this.state = state;
-    
+
     // Ensure .qwen directory exists
     const sessionDir = path.dirname(this.paths.sessionFile);
     await fs.mkdir(sessionDir, { recursive: true });
@@ -53,13 +58,13 @@ export class BmadSessionManager {
     // Atomic write: write to temp file, then rename
     const tempFile = path.join(
       os.tmpdir(),
-      `bmad-session-${Date.now()}-${Math.random().toString(36).slice(2)}.json`
+      `bmad-session-${Date.now()}-${Math.random().toString(36).slice(2)}.json`,
     );
 
     try {
       const content = JSON.stringify(state, null, 2);
       await fs.writeFile(tempFile, content, 'utf-8');
-      
+
       // Atomic rename (works on Windows too)
       await fs.rename(tempFile, this.paths.sessionFile);
     } catch (error) {
@@ -70,7 +75,7 @@ export class BmadSessionManager {
         // Ignore cleanup errors
       }
       throw new Error(
-        `Failed to write session file: ${error instanceof Error ? error.message : String(error)}`
+        `Failed to write session file: ${error instanceof Error ? error.message : String(error)}`,
       );
     }
   }
@@ -79,7 +84,8 @@ export class BmadSessionManager {
    * Update session state with partial data
    */
   async update(patch: Partial<SessionState>): Promise<SessionState> {
-    const current = this.state || await this.read() || this.createInitialState();
+    const current =
+      this.state || (await this.read()) || this.createInitialState();
     const updated: SessionState = {
       ...current,
       ...patch,
@@ -216,13 +222,20 @@ export class BmadSessionManager {
       throw new Error('No session state to backup');
     }
 
-    const backupDir = path.join(path.dirname(this.paths.sessionFile), 'backups');
+    const backupDir = path.join(
+      path.dirname(this.paths.sessionFile),
+      'backups',
+    );
     await fs.mkdir(backupDir, { recursive: true });
 
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
     const backupFile = path.join(backupDir, `bmad-session-${timestamp}.json`);
 
-    await fs.writeFile(backupFile, JSON.stringify(this.state, null, 2), 'utf-8');
+    await fs.writeFile(
+      backupFile,
+      JSON.stringify(this.state, null, 2),
+      'utf-8',
+    );
     return backupFile;
   }
 
@@ -240,11 +253,14 @@ export class BmadSessionManager {
    * List available backups
    */
   async listBackups(): Promise<string[]> {
-    const backupDir = path.join(path.dirname(this.paths.sessionFile), 'backups');
+    const backupDir = path.join(
+      path.dirname(this.paths.sessionFile),
+      'backups',
+    );
     try {
       const files = await fs.readdir(backupDir);
       return files
-        .filter(f => f.startsWith('bmad-session-') && f.endsWith('.json'))
+        .filter((f) => f.startsWith('bmad-session-') && f.endsWith('.json'))
         .sort()
         .reverse(); // Most recent first
     } catch {

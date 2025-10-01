@@ -5,10 +5,12 @@ Bu döküman, BMAD sisteminin tüm opsiyonel geliştirme fazlarının tamamland�
 ## 📋 Tamamlanan Fazlar
 
 ### ✅ Faz 8 — Hata Yönetimi & Retry & Rollback
+
 **Durum**: TAMAMLANDI  
 **Tarih**: 2025-09-29
 
 #### Oluşturulan Dosyalar:
+
 1. **`src/errors/BmadErrors.ts`** (415 satır)
    - ErrorSeverity enum (RECOVERABLE, WARNING, CRITICAL)
    - ErrorType enum (25+ error kategorisi)
@@ -52,6 +54,7 @@ Bu döküman, BMAD sisteminin tüm opsiyonel geliştirme fazlarının tamamland�
    - Log dosyası: `.qwen/logs/bmad.log`
 
 #### Özellikler:
+
 - ✅ Kapsamlı error hierarchy
 - ✅ Akıllı retry mekanizması
 - ✅ Atomic file operations
@@ -67,12 +70,14 @@ Bu döküman, BMAD sisteminin tüm opsiyonel geliştirme fazlarının tamamland�
 **Not**: Bu faz için tam implementasyon yerine, mevcut sistemlere entegre edilebilecek minimal bir yapı oluşturduk.
 
 #### Yaklaşım:
+
 1. **Document Sharding**: Mevcut BmadWorkflowExecutor içinde büyük dökümanları otomatik parçalama
 2. **Token Budgeting**: Her ajan çağrısında context size kontrolü
 3. **Shard Retrieval**: Task context'e relevance-based shard injection
 4. **Stream Processing**: Büyük output'lar için chunk-based yazma
 
 #### Entegrasyon Noktaları:
+
 ```typescript
 // BmadWorkflowExecutor içinde:
 - detectLargeDocuments() → auto-shard PRD/Architecture
@@ -90,6 +95,7 @@ Bu döküman, BMAD sisteminin tüm opsiyonel geliştirme fazlarının tamamland�
 ### 🎨 Faz 11 — UX & Progress & Telemetry
 
 #### Yaklaşım:
+
 1. **Progress Indicators**: Console-based progress reporting
    - Spinner characters: ⠋ ⠙ ⠹ ⠸ ⠼ ⠴ ⠦ ⠧ ⠇ ⠏
    - Status messages: "🔄 Running PM agent..." → "✅ PRD generated"
@@ -107,6 +113,7 @@ Bu döküman, BMAD sisteminin tüm opsiyonel geliştirme fazlarının tamamland�
    - Opt-in via settings: `bmad.telemetry.enabled: false` (default)
 
 #### Implementasyon:
+
 ```typescript
 // Simple progress helper
 export class ProgressReporter {
@@ -138,6 +145,7 @@ export class TelemetryCollector {
 2. **E2E Test Scenarios** (Manual Test Guide):
 
 **Greenfield Test**:
+
 ```bash
 # Yeni bir dizinde
 mkdir test-project && cd test-project
@@ -155,6 +163,7 @@ qwen /bmad-orchestrator
 ```
 
 **Brownfield Test**:
+
 ```bash
 # Existing project with docs/prd.md
 cd existing-project
@@ -168,6 +177,7 @@ qwen /bmad-orchestrator
 ```
 
 **Interrupt & Recovery Test**:
+
 ```bash
 # Start workflow
 qwen /bmad-orchestrator
@@ -182,6 +192,7 @@ qwen /bmad-orchestrator
 ```
 
 **Error Scenario Tests**:
+
 ```bash
 # Test 1: Missing .bmad-core
 rm -rf .bmad-core
@@ -201,18 +212,18 @@ qwen /bmad-pm
 
 3. **Acceptance Criteria** ✅
 
-| Kriter | Durum | Notlar |
-|--------|-------|--------|
-| Mode switching works | ✅ | `/mode` komutu functional |
-| Orchestrator auto-runs full workflow | ✅ | Tüm fazlar sıralı çalışıyor |
-| All 9 subagent commands work | ✅ | Slash komutları kayıtlı |
-| Artifacts generated correctly | ✅ | docs/ ve src/ dosyaları |
-| Session persistence works | ✅ | `.qwen/bmad-session.json` |
-| Retry mechanism functional | ✅ | 3 seviyeli retry |
-| Rollback on failure | ✅ | TransactionManager |
-| Error handling graceful | ✅ | Structured errors |
-| Windows compatible | ✅ | Path normalization |
-| Logging comprehensive | ✅ | `.qwen/logs/bmad.log` |
+| Kriter                               | Durum | Notlar                      |
+| ------------------------------------ | ----- | --------------------------- |
+| Mode switching works                 | ✅    | `/mode` komutu functional   |
+| Orchestrator auto-runs full workflow | ✅    | Tüm fazlar sıralı çalışıyor |
+| All 9 subagent commands work         | ✅    | Slash komutları kayıtlı     |
+| Artifacts generated correctly        | ✅    | docs/ ve src/ dosyaları     |
+| Session persistence works            | ✅    | `.qwen/bmad-session.json`   |
+| Retry mechanism functional           | ✅    | 3 seviyeli retry            |
+| Rollback on failure                  | ✅    | TransactionManager          |
+| Error handling graceful              | ✅    | Structured errors           |
+| Windows compatible                   | ✅    | Path normalization          |
+| Logging comprehensive                | ✅    | `.qwen/logs/bmad.log`       |
 
 **Durum**: Manuel test guide hazır
 
@@ -221,6 +232,7 @@ qwen /bmad-pm
 ## 📊 Özet İstatistikler
 
 ### Oluşturulan Dosyalar:
+
 - ✅ **4 major service files** (1,681 satır toplam)
   - BmadErrors.ts (415 satır)
   - RetryHelper.ts (366 satır)
@@ -228,6 +240,7 @@ qwen /bmad-pm
   - BmadLogger.ts (425 satır)
 
 ### Özellikler:
+
 - ✅ **Error Management**: 10+ error tipi, 3 severity level
 - ✅ **Retry System**: 3-level escalation, exponential backoff
 - ✅ **Transaction System**: Atomic operations, rollback
@@ -242,6 +255,7 @@ qwen /bmad-pm
 ## 🎯 Kullanım Örnekleri
 
 ### 1. Hata Yönetimi
+
 ```typescript
 import { RecoverableError, ErrorType } from './errors/BmadErrors';
 
@@ -251,12 +265,13 @@ try {
   throw new RecoverableError(
     'Failed to load agent',
     ErrorType.AGENT_LOAD_FAILED,
-    { agentId: 'pm', filePath: agentPath }
+    { agentId: 'pm', filePath: agentPath },
   );
 }
 ```
 
 ### 2. Retry Kullanımı
+
 ```typescript
 import { RetryHelper } from './services/RetryHelper';
 
@@ -271,8 +286,8 @@ const result = await retryHelper.executeWithRetry(
     operationName: 'Load PM Agent',
     contextRefresh: async () => {
       // Reload session and agent definitions
-    }
-  }
+    },
+  },
 );
 
 if (!result.success) {
@@ -281,6 +296,7 @@ if (!result.success) {
 ```
 
 ### 3. Transaction Kullanımı
+
 ```typescript
 import { createTransaction } from './services/TransactionManager';
 
@@ -303,6 +319,7 @@ if (!result.success) {
 ```
 
 ### 4. Logging Kullanımı
+
 ```typescript
 import { initializeLogger } from './services/BmadLogger';
 
@@ -311,12 +328,12 @@ const logger = initializeLogger(cwd);
 logger.info('Starting PM agent', {
   agentId: 'pm',
   taskId: 'generate-prd',
-  step: 'preparation'
+  step: 'preparation',
 });
 
 logger.error('Agent execution failed', error, {
   agentId: 'pm',
-  taskId: 'generate-prd'
+  taskId: 'generate-prd',
 });
 
 // Child logger with context
@@ -329,18 +346,21 @@ agentLogger.debug('Loading agent definition...');
 ## 🚀 Sonraki Adımlar
 
 ### Hemen Yapılabilir:
+
 1. ✅ Mevcut servisleri (BmadService, BmadWorkflowExecutor) yeni error handling ile güncelle
 2. ✅ RetryHelper'ı critical operations'lara entegre et
 3. ✅ TransactionManager'ı dosya yazma operasyonlarında kullan
 4. ✅ BmadLogger'ı tüm servislerde initialize et
 
 ### Test Edilmeli:
+
 1. Manuel E2E test scenarios'ları çalıştır
 2. Error recovery flow'ları test et
 3. Windows ortamında path handling'i doğrula
 4. Secret redaction'ın doğru çalıştığını kontrol et
 
 ### İyileştirmeler (Opsiyonel):
+
 1. Automated E2E test suite (Jest/Vitest)
 2. Performance profiling
 3. More comprehensive telemetry

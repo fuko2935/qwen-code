@@ -6,7 +6,8 @@
 
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { load as yamlLoad } from 'js-yaml';
+// @ts-expect-error - js-yaml types
+import yaml from 'js-yaml';
 import type { AgentDefinition } from '../config/bmadConfig.js';
 import { BmadPaths } from '../config/bmadConfig.js';
 
@@ -114,7 +115,7 @@ export class BmadAgentLoader {
 
     let parsed: ParsedYamlFrontMatter;
     try {
-      parsed = yamlLoad(yamlMatch[1]) as ParsedYamlFrontMatter;
+      parsed = (yaml as any).load(yamlMatch[1]) as ParsedYamlFrontMatter;
     } catch (error) {
       throw new Error(
         `Failed to parse YAML in agent file ${filePath}: ${error instanceof Error ? error.message : String(error)}`,

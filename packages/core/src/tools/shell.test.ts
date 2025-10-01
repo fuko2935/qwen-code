@@ -868,14 +868,12 @@ describe('Timeout behavior', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    mockShellExecutionService.mockImplementation((_cmd, _cwd, _callback) => {
-      return {
-        pid: 12345,
-        result: new Promise((resolve) => {
-          resolveExecutionPromise = resolve;
-        }),
-      };
-    });
+    mockShellExecutionService.mockImplementation((_cmd, _cwd, _callback) => ({
+      pid: 12345,
+      result: new Promise((resolve) => {
+        resolveExecutionPromise = resolve;
+      }),
+    }));
   });
 
   it('should time out and include timeout message', async () => {

@@ -32,12 +32,14 @@ export const useModeSelection = (
       try {
         // Save mode to settings (user scope by default)
         loadedSettings.setValue(SettingScope.User, 'bmadMode', mode);
-        
-        const modeLabel = mode === 'bmad-expert' ? 'BMAD Expert Mode' : 'Normal Mode';
-        const modeInfo = mode === 'bmad-expert'
-          ? 'BMAD Expert Mode activated with autonomous workflow management and specialized agents.'
-          : 'Normal Mode activated with standard Qwen Code experience.';
-        
+
+        const modeLabel =
+          mode === 'bmad-expert' ? 'BMAD Expert Mode' : 'Normal Mode';
+        const modeInfo =
+          mode === 'bmad-expert'
+            ? 'BMAD Expert Mode activated with autonomous workflow management and specialized agents.'
+            : 'Normal Mode activated with standard Qwen Code experience.';
+
         addItem(
           {
             type: MessageType.INFO,
@@ -45,7 +47,7 @@ export const useModeSelection = (
           },
           Date.now(),
         );
-        
+
         setIsModeDialogOpen(false);
       } catch (error) {
         addItem(

@@ -42,7 +42,10 @@ import { toolsCommand } from '../ui/commands/toolsCommand.js';
 import { vimCommand } from '../ui/commands/vimCommand.js';
 import { setupGithubCommand } from '../ui/commands/setupGithubCommand.js';
 import { modeCommand } from '../ui/commands/modeCommand.js';
-import { bmadCommands, initializeBmadCommands } from '../ui/commands/bmad/index.js';
+import {
+  bmadCommands,
+  initializeBmadCommands,
+} from '../ui/commands/bmad/index.js';
 
 /**
  * Loads the core, hard-coded slash commands that are an integral part
@@ -73,7 +76,9 @@ export class BuiltinCommandLoader implements ICommandLoader {
       cwd =
         typeof (this.config as { getProjectRoot?: () => string | undefined })
           .getProjectRoot === 'function'
-          ? (this.config as { getProjectRoot: () => string | undefined }).getProjectRoot()
+          ? (
+              this.config as { getProjectRoot: () => string | undefined }
+            ).getProjectRoot()
           : undefined;
     } catch {
       cwd = undefined;
@@ -169,7 +174,9 @@ export class BuiltinCommandLoader implements ICommandLoader {
     const mode = this.resolveBmadMode();
     if (mode === 'bmad-expert') {
       baseDefinitions.push(...bmadCommands);
-      const { bmadConfigCommand } = await import('../ui/commands/bmadConfigCommand.js');
+      const { bmadConfigCommand } = await import(
+        '../ui/commands/bmadConfigCommand.js'
+      );
       baseDefinitions.push(bmadConfigCommand);
     }
 

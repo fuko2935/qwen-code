@@ -44,7 +44,10 @@ export class BmadWorkflowExecutor {
   /**
    * Start a new workflow from scratch
    */
-  private async startNewWorkflow(userInput: string, session: SessionState): Promise<void> {
+  private async startNewWorkflow(
+    userInput: string,
+    session: SessionState,
+  ): Promise<void> {
     console.log(`📝 Planning workflow for ${session.projectType} project...\n`);
 
     // Store user input in context
@@ -58,7 +61,7 @@ export class BmadWorkflowExecutor {
 
     // Plan phases based on project type
     const phases = this.planWorkflowPhases(session.projectType, userInput);
-    
+
     console.log(`📋 Workflow Plan (${phases.length} phases):`);
     phases.forEach((phase, index) => {
       const agent = this.getPhaseAgent(phase);
@@ -114,30 +117,33 @@ export class BmadWorkflowExecutor {
   /**
    * Plan workflow phases based on project type
    */
-  private planWorkflowPhases(projectType: ProjectType, userInput: string): WorkflowPhase[] {
+  private planWorkflowPhases(
+    projectType: ProjectType,
+    userInput: string,
+  ): WorkflowPhase[] {
     const phases: WorkflowPhase[] = [];
 
     if (projectType === 'greenfield') {
       // Full greenfield workflow
-      
+
       // Analysis (optional, can be skipped)
       if (this.needsAnalysis(userInput)) {
         phases.push(WorkflowPhase.ANALYSIS);
       }
 
       // Core planning phases
-      phases.push(WorkflowPhase.PRODUCT);  // PRD
+      phases.push(WorkflowPhase.PRODUCT); // PRD
 
       // UX (if frontend detected)
       if (this.needsUX(userInput)) {
         phases.push(WorkflowPhase.UX);
       }
 
-      phases.push(WorkflowPhase.ARCHITECTURE);  // Architecture
-      phases.push(WorkflowPhase.PLANNING);      // PO shard
+      phases.push(WorkflowPhase.ARCHITECTURE); // Architecture
+      phases.push(WorkflowPhase.PLANNING); // PO shard
       phases.push(WorkflowPhase.STORY_CREATION); // SM draft
-      phases.push(WorkflowPhase.DEVELOPMENT);   // Dev implement
-      phases.push(WorkflowPhase.QA);            // QA review
+      phases.push(WorkflowPhase.DEVELOPMENT); // Dev implement
+      phases.push(WorkflowPhase.QA); // QA review
     } else {
       // Brownfield workflow (resume existing project)
       phases.push(WorkflowPhase.STORY_CREATION); // Start with stories
@@ -151,7 +157,10 @@ export class BmadWorkflowExecutor {
   /**
    * Execute a single workflow phase using real subagent delegation
    */
-  private async executePhase(phase: WorkflowPhase, session: SessionState): Promise<void> {
+  private async executePhase(
+    phase: WorkflowPhase,
+    session: SessionState,
+  ): Promise<void> {
     const agentId = this.getPhaseAgent(phase);
     const subagentName = this._getSubagentName(agentId);
     const taskId = this.getPhaseTask(phase);
@@ -171,17 +180,25 @@ export class BmadWorkflowExecutor {
 
     try {
       // Load subagent configuration
-      const subagent = await this._subagentManager.loadSubagent(subagentName, 'builtin');
-      
+      const subagent = await this._subagentManager.loadSubagent(
+        subagentName,
+        'builtin',
+      );
+
       if (!subagent) {
         throw new Error(`Subagent ${subagentName} not found`);
       }
 
       console.log(`📝 ${subagent.description}`);
-      console.log(`🎯 Executing with specialized agent (orchestrator-only mode respected)...\n`);
+      console.log(
+        `🎯 Executing with specialized agent (orchestrator-only mode respected)...\n`,
+      );
 
       // Create a real subagent scope and run non-interactively (no persona injection into main convo)
-      const scope = await this._subagentManager.createSubagentScope(subagent, this.coreConfig);
+      const scope = await this._subagentManager.createSubagentScope(
+        subagent,
+        this.coreConfig,
+      );
       // Create a minimal context object compatible with SubAgentScope expectations
       const state: Record<string, unknown> = {};
       const ctx = {
@@ -192,7 +209,9 @@ export class BmadWorkflowExecutor {
         get_keys: () => Object.keys(state),
       } as unknown as object;
 
-      const initialRequest = String((session.context as Record<string, unknown>)?.['initialRequest'] || '');
+      const initialRequest = String(
+        (session.context as Record<string, unknown>)?.['initialRequest'] || '',
+      );
       const prompt = taskId
         ? `Task: ${taskId}\n\nProject description:\n${initialRequest}`
         : `Project description:\n${initialRequest}`;
@@ -224,7 +243,9 @@ export class BmadWorkflowExecutor {
       }
     } catch (error) {
       console.error(`❌ Phase failed: ${phase}`);
-      console.error(`Error: ${error instanceof Error ? error.message : String(error)}\n`);
+      console.error(
+        `Error: ${error instanceof Error ? error.message : String(error)}\n`,
+      );
 
       // Record failure
       await this.bmadService.persistStep({
@@ -310,8 +331,8 @@ export class BmadWorkflowExecutor {
     // Skip analysis for simple, well-defined projects
     const skipKeywords = ['simple', 'basic', 'quick', 'small'];
     const lowerInput = userInput.toLowerCase();
-    
-    return !skipKeywords.some(keyword => lowerInput.includes(keyword));
+
+    return !skipKeywords.some((keyword) => lowerInput.includes(keyword));
   }
 
   /**
@@ -320,13 +341,26 @@ export class BmadWorkflowExecutor {
   private needsUX(userInput: string): boolean {
     // Include UX if frontend keywords detected
     const frontendKeywords = [
-      'ui', 'ux', 'interface', 'frontend', 'front-end', 'web app', 
-      'react', 'vue', 'angular', 'svelte', 'next.js', 'nuxt',
-      'website', 'dashboard', 'app', 'mobile'
+      'ui',
+      'ux',
+      'interface',
+      'frontend',
+      'front-end',
+      'web app',
+      'react',
+      'vue',
+      'angular',
+      'svelte',
+      'next.js',
+      'nuxt',
+      'website',
+      'dashboard',
+      'app',
+      'mobile',
     ];
-    
+
     const lowerInput = userInput.toLowerCase();
-    return frontendKeywords.some(keyword => lowerInput.includes(keyword));
+    return frontendKeywords.some((keyword) => lowerInput.includes(keyword));
   }
 
   /**
@@ -361,7 +395,7 @@ export class BmadWorkflowExecutor {
     const duration = Date.now() - startTime;
     const minutes = Math.floor(duration / 60000);
     const seconds = Math.floor((duration % 60000) / 1000);
-    
+
     if (minutes > 0) {
       return `${minutes}m ${seconds}s`;
     }

@@ -4,7 +4,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import type { SlashCommand, CommandContext, MessageActionReturn } from './types.js';
+import type {
+  SlashCommand,
+  CommandContext,
+  MessageActionReturn,
+} from './types.js';
 import { CommandKind } from './types.js';
 import { BmadService } from '../../services/BmadService.js';
 
@@ -19,7 +23,10 @@ export const bmadConfigCommand: SlashCommand = {
   name: 'bmad-config',
   description: 'Configure BMAD behavior (e.g., orchestrator-only mode)',
   kind: CommandKind.BUILT_IN,
-  action: async (context: CommandContext, args: string): Promise<MessageActionReturn> => {
+  action: async (
+    context: CommandContext,
+    args: string,
+  ): Promise<MessageActionReturn> => {
     const trimmed = (args || '').trim();
     if (!trimmed) {
       const status = BmadService.getOrchestratorOnly() ? 'on' : 'off';
@@ -37,14 +44,16 @@ export const bmadConfigCommand: SlashCommand = {
         return {
           type: 'message',
           messageType: 'info',
-          content: 'BMAD orchestrator-only mode enabled. Subagent prompt injection will be skipped.',
+          content:
+            'BMAD orchestrator-only mode enabled. Subagent prompt injection will be skipped.',
         };
       } else if (parts[1] === 'off') {
         BmadService.setOrchestratorOnly(false);
         return {
           type: 'message',
           messageType: 'info',
-          content: 'BMAD orchestrator-only mode disabled. Subagent prompts may be injected when delegating.',
+          content:
+            'BMAD orchestrator-only mode disabled. Subagent prompts may be injected when delegating.',
         };
       }
     }

@@ -257,4 +257,16 @@ export interface RunConfig {
    * before the execution is terminated. Helps prevent infinite loops.
    */
   max_turns?: number;
+  /**
+   * Whether to allow nested task delegation via the Task tool.
+   * When true, subagents can create their own child sessions.
+   * @default false for non-interactive, true for interactive
+   */
+  allow_nested_tasks?: boolean;
+  /**
+   * Whether to run the subagent in interactive mode.
+   * Interactive mode enables bidirectional messaging between user and subagent.
+   * @default false
+   */
+  interactive?: boolean;
 }

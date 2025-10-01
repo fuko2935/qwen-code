@@ -12,6 +12,7 @@ import {
   isRetryableError,
   isCriticalError,
   ErrorType,
+  ErrorSeverity,
 } from '../errors/BmadErrors.js';
 import type { BmadSessionManager } from './BmadSessionManager.js';
 import type { BmadAgentLoader } from './BmadAgentLoader.js';
@@ -199,7 +200,7 @@ export class RetryHelper {
             : new BmadError(
                 String(error),
                 ErrorType.UNKNOWN,
-                'recoverable' as ErrorSeverity,
+                ErrorSeverity.RECOVERABLE,
                 { originalError: error instanceof Error ? error : undefined },
               );
 

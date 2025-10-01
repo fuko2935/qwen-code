@@ -690,7 +690,8 @@ export const SETTINGS_SCHEMA = {
         category: 'BMAD',
         requiresRestart: true,
         default: 'normal' as 'normal' | 'bmad-expert',
-        description: 'Agent mode: normal (standard Qwen) or bmad-expert (BMAD Orchestrator)',
+        description:
+          'Agent mode: normal (standard Qwen) or bmad-expert (BMAD Orchestrator)',
         showInDialog: true,
       },
       autoResume: {
@@ -699,7 +700,8 @@ export const SETTINGS_SCHEMA = {
         category: 'BMAD',
         requiresRestart: false,
         default: true,
-        description: 'Automatically resume interrupted BMAD workflows on startup',
+        description:
+          'Automatically resume interrupted BMAD workflows on startup',
         showInDialog: true,
       },
       maxRetries: {

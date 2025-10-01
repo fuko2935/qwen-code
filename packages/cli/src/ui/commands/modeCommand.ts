@@ -18,13 +18,10 @@ export const modeCommand: SlashCommand = {
   name: 'mode',
   description: 'Switch between Normal and BMAD Expert modes',
   kind: CommandKind.BUILT_IN,
-  action: async (
-    _context: CommandContext,
-  ): Promise<OpenDialogActionReturn> => {
+  action: async (_context: CommandContext): Promise<OpenDialogActionReturn> =>
     // Trigger mode selection dialog
-    return {
+    ({
       type: 'dialog',
       dialog: 'mode',
-    };
-  },
+    }),
 };

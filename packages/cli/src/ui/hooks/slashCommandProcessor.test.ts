@@ -116,7 +116,9 @@ describe('useSlashCommandProcessor', () => {
     removeStatusChangeListener: vi.fn(),
   } as unknown as IdeClient);
 
-  const mockSettings = { merged: { bmadMode: 'normal' } } as unknown as LoadedSettings;
+  const mockSettings = {
+    merged: { bmadMode: 'normal' },
+  } as unknown as LoadedSettings;
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -171,7 +173,10 @@ describe('useSlashCommandProcessor', () => {
   describe('Initialization and Command Loading', () => {
     it('should initialize CommandService with all required loaders', () => {
       setupProcessorHook();
-      expect(BuiltinCommandLoader).toHaveBeenCalledWith(mockConfig, mockSettings);
+      expect(BuiltinCommandLoader).toHaveBeenCalledWith(
+        mockConfig,
+        mockSettings,
+      );
       expect(FileCommandLoader).toHaveBeenCalledWith(mockConfig);
       expect(McpPromptLoader).toHaveBeenCalledWith(mockConfig);
     });

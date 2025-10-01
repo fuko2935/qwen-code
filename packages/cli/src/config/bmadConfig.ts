@@ -236,11 +236,7 @@ export class BmadPaths {
   }
 
   agent(agentId: string): string {
-    return path.join(
-      this.bmadCore,
-      BMAD_CONFIG.AGENTS_DIR,
-      `${agentId}.md`,
-    );
+    return path.join(this.bmadCore, BMAD_CONFIG.AGENTS_DIR, `${agentId}.md`);
   }
 
   task(taskId: string): string {

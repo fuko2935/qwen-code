@@ -243,28 +243,38 @@ describe('WorkspaceContext with real filesystem', () => {
         });
       });
 
-      itIfNotWindows('should reject symbolic file links outside the workspace', () => {
-        const realFile = path.join(tempDir, 'real-file.txt');
-        fs.writeFileSync(realFile, 'content');
+      itIfNotWindows(
+        'should reject symbolic file links outside the workspace',
+        () => {
+          const realFile = path.join(tempDir, 'real-file.txt');
+          fs.writeFileSync(realFile, 'content');
 
-        const symlinkFile = path.join(cwd, 'symlink-to-real-file');
-        fs.symlinkSync(realFile, symlinkFile, 'file');
+          const symlinkFile = path.join(cwd, 'symlink-to-real-file');
+          fs.symlinkSync(realFile, symlinkFile, 'file');
 
-        const workspaceContext = new WorkspaceContext(cwd);
+          const workspaceContext = new WorkspaceContext(cwd);
 
-        expect(workspaceContext.isPathWithinWorkspace(symlinkFile)).toBe(false);
-      });
+          expect(workspaceContext.isPathWithinWorkspace(symlinkFile)).toBe(
+            false,
+          );
+        },
+      );
 
-      itIfNotWindows('should reject non-existent symbolic file links outside the workspace', () => {
-        const realFile = path.join(tempDir, 'real-file.txt');
+      itIfNotWindows(
+        'should reject non-existent symbolic file links outside the workspace',
+        () => {
+          const realFile = path.join(tempDir, 'real-file.txt');
 
-        const symlinkFile = path.join(cwd, 'symlink-to-real-file');
-        fs.symlinkSync(realFile, symlinkFile, 'file');
+          const symlinkFile = path.join(cwd, 'symlink-to-real-file');
+          fs.symlinkSync(realFile, symlinkFile, 'file');
 
-        const workspaceContext = new WorkspaceContext(cwd);
+          const workspaceContext = new WorkspaceContext(cwd);
 
-        expect(workspaceContext.isPathWithinWorkspace(symlinkFile)).toBe(false);
-      });
+          expect(workspaceContext.isPathWithinWorkspace(symlinkFile)).toBe(
+            false,
+          );
+        },
+      );
 
       itIfNotWindows('should handle circular symlinks gracefully', () => {
         const workspaceContext = new WorkspaceContext(cwd);

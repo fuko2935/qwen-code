@@ -68,7 +68,12 @@ export const Header: React.FC<HeaderProps> = ({
         </Box>
       )}
       {bmadMode === 'bmad-expert' && (
-        <Box width="100%" flexDirection="row" justifyContent="flex-end" marginTop={1}>
+        <Box
+          width="100%"
+          flexDirection="row"
+          justifyContent="flex-end"
+          marginTop={1}
+        >
           <Text color={Colors.AccentYellow}>★ BMAD Expert Mode</Text>
         </Box>
       )}
