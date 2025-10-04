@@ -237,7 +237,7 @@ export class TransactionManager {
         const backupPath = path.join(this.tempDir, `${path.basename(operation.targetPath)}.backup`);
         await fs.writeFile(backupPath, originalContent, 'utf-8');
         // Store backup path for potential rollback
-      } catch (error) {
+      } catch (_error) {
         // File might not exist yet, which is okay
       }
     }
@@ -253,7 +253,7 @@ export class TransactionManager {
       const backupPath = path.join(this.tempDir, `${path.basename(operation.targetPath)}.backup`);
       await fs.writeFile(backupPath, content, 'utf-8');
       operation.backupPath = backupPath;
-    } catch (error) {
+    } catch (_error) {
       // File might not exist, which is okay for delete
       console.warn(`Could not backup file for deletion: ${operation.targetPath}`);
     }
@@ -376,7 +376,7 @@ export class TransactionManager {
   private async commitDelete(operation: FileOperation): Promise<void> {
     try {
       await fs.unlink(operation.targetPath);
-    } catch (error) {
+    } catch (_error) {
       // File might already be deleted
       console.warn(`Could not delete file: ${operation.targetPath}`);
     }

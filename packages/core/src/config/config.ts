@@ -251,6 +251,9 @@ export class Config {
   private toolRegistry!: ToolRegistry;
   private promptRegistry!: PromptRegistry;
   private subagentManager!: SubagentManager;
+  // Nested subagent execution tracking
+  private subagentDepth: number = 0;
+  private readonly maxSubagentDepth: number;
   private sessionId: string;
   private fileSystemService: FileSystemService;
   private contentGeneratorConfig!: ContentGeneratorConfig;
@@ -440,6 +443,19 @@ export class Config {
     this.logger.initialize().catch((error) => {
       console.debug('Failed to initialize logger:', error);
     });
+
+    // Initialize nested subagent depth limits (be robust if process/env are unavailable in tests)
+    let envMaxDepth = Number.NaN;
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const env: any = typeof process !== 'undefined' ? (process as any).env : undefined;
+      envMaxDepth = Number(env?.['QWEN_SUBAGENT_MAX_DEPTH']);
+    } catch {
+      // ignore
+    }
+    this.maxSubagentDepth = Number.isFinite(envMaxDepth) && envMaxDepth >= 0
+      ? envMaxDepth
+      : 2; // Default allows one nested subagent (primary -> subagent -> subagent)
 
     if (params.contextFileName) {
       setGeminiMdFilename(params.contextFileName);
@@ -1001,6 +1017,23 @@ export class Config {
 
   getSubagentManager(): SubagentManager {
     return this.subagentManager;
+  }
+
+  // Subagent nesting helpers
+  getSubagentDepth(): number {
+    return this.subagentDepth;
+  }
+
+  getMaxSubagentDepth(): number {
+    return this.maxSubagentDepth;
+  }
+
+  incrementSubagentDepth(): void {
+    this.subagentDepth += 1;
+  }
+
+  decrementSubagentDepth(): void {
+    if (this.subagentDepth > 0) this.subagentDepth -= 1;
   }
 
   async createToolRegistry(): Promise<ToolRegistry> {

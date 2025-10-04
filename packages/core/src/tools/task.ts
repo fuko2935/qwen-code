@@ -461,6 +461,30 @@ class TaskToolInvocation extends BaseToolInvocation<TaskParams, ToolResult> {
     updateOutput?: (output: ToolResultDisplay) => void,
   ): Promise<ToolResult> {
     try {
+      // Enforce nested subagent depth limit
+      const currentDepth =
+        // Cast to any to avoid strict typing—methods exist on Config
+        (this.config as any).getSubagentDepth?.() ?? 0;
+      const maxDepthRaw = (this.config as any).getMaxSubagentDepth?.();
+      const maxDepth =
+        typeof maxDepthRaw === 'number' && Number.isFinite(maxDepthRaw)
+          ? maxDepthRaw
+          : Number.POSITIVE_INFINITY;
+      if (currentDepth >= maxDepth) {
+        const reason = `Max subagent nesting depth (${maxDepth}) reached; cannot launch another subagent.`;
+        return {
+          llmContent: reason,
+          returnDisplay: {
+            type: 'task_execution' as const,
+            subagentName: this.params.subagent_type,
+            taskDescription: this.params.description,
+            taskPrompt: this.params.prompt,
+            status: 'failed' as const,
+            terminateReason: reason,
+          },
+        };
+      }
+
       // Load the subagent configuration
       const subagentConfig = await this.subagentManager.loadSubagent(
         this.params.subagent_type,
@@ -509,8 +533,13 @@ class TaskToolInvocation extends BaseToolInvocation<TaskParams, ToolResult> {
       const contextState = new ContextState();
       contextState.set('task_prompt', this.params.prompt);
 
-      // Execute the subagent (blocking)
-      await subagentScope.runNonInteractive(contextState, signal);
+      // Execute the subagent (blocking) with depth tracking
+      try {
+        (this.config as any).incrementSubagentDepth?.();
+        await subagentScope.runNonInteractive(contextState, signal);
+      } finally {
+        (this.config as any).decrementSubagentDepth?.();
+      }
 
       // Get the results
       const finalText = subagentScope.getFinalText();

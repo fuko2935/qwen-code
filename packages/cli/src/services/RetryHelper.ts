@@ -274,7 +274,7 @@ export class RetryHelper {
    */
   createContextRefreshCallback(
     agentId?: string,
-    taskId?: string
+    _taskId?: string
   ): ContextRefreshCallback {
     return async () => {
       console.log('🔄 Refreshing context...');

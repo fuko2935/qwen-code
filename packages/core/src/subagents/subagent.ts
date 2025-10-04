@@ -283,6 +283,20 @@ export class SubAgentScope {
     // Prepare the list of tools available to the subagent.
     // If no explicit toolConfig or it contains "*" or is empty, inherit all tools.
     const toolsList: FunctionDeclaration[] = [];
+    const currentDepth =
+      typeof (this.runtimeContext as any).getSubagentDepth === 'function'
+        ? (this.runtimeContext as any).getSubagentDepth()
+        : 0;
+    const maxDepthRaw =
+      typeof (this.runtimeContext as any).getMaxSubagentDepth === 'function'
+        ? (this.runtimeContext as any).getMaxSubagentDepth()
+        : undefined;
+    const maxDepth =
+      typeof maxDepthRaw === 'number' && Number.isFinite(maxDepthRaw)
+        ? maxDepthRaw
+        : Number.POSITIVE_INFINITY;
+    const allowTaskTool = currentDepth < maxDepth;
+
     if (this.toolConfig) {
       const asStrings = this.toolConfig.tools.filter(
         (t): t is string => typeof t === 'string',
@@ -293,24 +307,17 @@ export class SubAgentScope {
       );
 
       if (hasWildcard || asStrings.length === 0) {
-        toolsList.push(
-          ...toolRegistry
-            .getFunctionDeclarations()
-            .filter((t) => t.name !== TaskTool.Name),
-        );
+        const decls = toolRegistry.getFunctionDeclarations();
+        toolsList.push(...(allowTaskTool ? decls : decls.filter((t) => t.name !== TaskTool.Name)));
       } else {
-        toolsList.push(
-          ...toolRegistry.getFunctionDeclarationsFiltered(asStrings),
-        );
+        const decls = toolRegistry.getFunctionDeclarationsFiltered(asStrings);
+        toolsList.push(...(allowTaskTool ? decls : decls.filter((t) => t.name !== TaskTool.Name)));
       }
       toolsList.push(...onlyInlineDecls);
     } else {
       // Inherit all available tools by default when not specified.
-      toolsList.push(
-        ...toolRegistry
-          .getFunctionDeclarations()
-          .filter((t) => t.name !== TaskTool.Name),
-      );
+      const decls = toolRegistry.getFunctionDeclarations();
+      toolsList.push(...(allowTaskTool ? decls : decls.filter((t) => t.name !== TaskTool.Name)));
     }
 
     const initialTaskText = String(

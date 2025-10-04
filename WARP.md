@@ -195,6 +195,12 @@ System prompt content with ${variable} templating
 1. `.qwen/agents/` - Project-specific
 2. `~/.qwen/agents/` - User global
 
+#### Nested Subagents
+- Subagents can call other subagents via the `Task` tool.
+- Depth limit defaults to 2 (primary -> subagent -> subagent).
+- To adjust, set environment variable `QWEN_SUBAGENT_MAX_DEPTH` (e.g., `QWEN_SUBAGENT_MAX_DEPTH=3`).
+- When the limit is reached, further subagent calls are blocked with a clear error message.
+
 ### Checkpointing Data
 - Shadow repository: `~/.qwen/history/<project_hash>`
 - Checkpoint files: `~/.qwen/tmp/<project_hash>/checkpoints`

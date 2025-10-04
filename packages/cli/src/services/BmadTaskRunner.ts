@@ -77,7 +77,7 @@ export class BmadTaskRunner {
     
     try {
       content = await fs.readFile(taskPath, 'utf-8');
-    } catch (error) {
+    } catch (_error) {
       throw new Error(
         `Task file not found: ${taskPath}\n` +
         `Make sure the task exists in .bmad-core/tasks/`
@@ -123,7 +123,7 @@ export class BmadTaskRunner {
     let content: string;
     try {
       content = await fs.readFile(templatePath, 'utf-8');
-    } catch (error) {
+    } catch (_error) {
       throw new Error(
         `Template file not found: ${templatePath}\n` +
         `Make sure the template exists in .bmad-core/templates/`

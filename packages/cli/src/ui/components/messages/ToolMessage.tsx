@@ -143,6 +143,7 @@ const SubagentExecutionRenderer: React.FC<{
     availableHeight={availableHeight}
     childWidth={childWidth}
     config={config}
+    nestLevel={0}
   />
 );
 
@@ -238,8 +239,13 @@ export const ToolMessage: React.FC<ToolMessageProps> = ({
   // Use the custom hook to determine the display type
   const displayRenderer = useResultDisplayRenderer(resultDisplay);
 
+  const isTaskCard = displayRenderer.type === 'task';
+  const borderProps = isTaskCard
+    ? ({ borderStyle: 'round', borderColor: Colors.AccentYellow } as const)
+    : ({} as const);
+
   return (
-    <Box paddingX={1} paddingY={0} flexDirection="column">
+    <Box paddingX={1} paddingY={0} flexDirection="column" {...borderProps}>
       <Box minHeight={1}>
         <ToolStatusIndicator status={status} />
         <ToolInfo

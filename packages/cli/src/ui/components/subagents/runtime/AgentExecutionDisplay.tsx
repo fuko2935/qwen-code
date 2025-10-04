@@ -25,6 +25,7 @@ export interface AgentExecutionDisplayProps {
   availableHeight?: number;
   childWidth: number;
   config: Config;
+  nestLevel?: number;
 }
 
 const getStatusColor = (
@@ -66,6 +67,18 @@ const getStatusText = (status: TaskResultDisplay['status']) => {
   }
 };
 
+const StatusBadge: React.FC<{ status: TaskResultDisplay['status'] }> = ({
+  status,
+}) => {
+  const color = getStatusColor(status);
+  const label = getStatusText(status).toUpperCase();
+  return (
+    <Text color={color}>
+      [{label}]
+    </Text>
+  );
+};
+
 const MAX_TOOL_CALLS = 5;
 const MAX_TASK_PROMPT_LINES = 5;
 
@@ -79,6 +92,7 @@ export const AgentExecutionDisplay: React.FC<AgentExecutionDisplayProps> = ({
   availableHeight,
   childWidth,
   config,
+  nestLevel = 0,
 }) => {
   const [displayMode, setDisplayMode] = React.useState<DisplayMode>('compact');
 
@@ -153,6 +167,8 @@ export const AgentExecutionDisplay: React.FC<AgentExecutionDisplayProps> = ({
                 <ToolCallItem
                   toolCall={data.toolCalls[data.toolCalls.length - 1]}
                   compact={true}
+                  config={config}
+                  childWidth={childWidth}
                 />
                 {/* Show count of additional tool calls if there are more than 1 */}
                 {data.toolCalls.length > 1 && !data.pendingConfirmation && (
@@ -231,6 +247,9 @@ export const AgentExecutionDisplay: React.FC<AgentExecutionDisplayProps> = ({
             <ToolCallsList
               toolCalls={data.toolCalls}
               displayMode={displayMode}
+              config={config}
+              childWidth={childWidth}
+              nestLevel={nestLevel}
             />
           </Box>
         )}
@@ -253,7 +272,13 @@ export const AgentExecutionDisplay: React.FC<AgentExecutionDisplayProps> = ({
       {(data.status === 'completed' ||
         data.status === 'failed' ||
         data.status === 'cancelled') && (
-        <ResultsSection data={data} displayMode={displayMode} />
+      <ResultsSection
+        data={data}
+        displayMode={displayMode}
+        config={config}
+        childWidth={childWidth}
+        nestLevel={nestLevel}
+      />
       )}
 
       {/* Footer with keyboard shortcuts */}
@@ -326,7 +351,10 @@ const StatusIndicator: React.FC<{
 const ToolCallsList: React.FC<{
   toolCalls: TaskResultDisplay['toolCalls'];
   displayMode: DisplayMode;
-}> = ({ toolCalls, displayMode }) => {
+  config: Config;
+  childWidth: number;
+  nestLevel: number;
+}> = ({ toolCalls, displayMode, config, childWidth, nestLevel }) => {
   const calls = toolCalls || [];
   const shouldTruncate = calls.length > MAX_TOOL_CALLS;
   const showAll = displayMode === 'verbose';
@@ -338,7 +366,9 @@ const ToolCallsList: React.FC<{
   return (
     <Box flexDirection="column">
       <Box flexDirection="row" marginBottom={1}>
-        <Text color={theme.text.primary}>Tools:</Text>
+        <Text color={theme.text.primary}>
+          {nestLevel > 0 ? '├─ Tools:' : 'Tools:'}
+        </Text>
         {shouldTruncate && displayMode === 'default' && (
           <Text color={Colors.Gray}>
             {' '}
@@ -347,7 +377,13 @@ const ToolCallsList: React.FC<{
         )}
       </Box>
       {reversedDisplayCalls.map((toolCall, index) => (
-        <ToolCallItem key={`${toolCall.name}-${index}`} toolCall={toolCall} />
+        <ToolCallItem
+          key={`${toolCall.name}-${index}`}
+          toolCall={toolCall}
+          config={config}
+          childWidth={childWidth}
+          nestLevel={nestLevel}
+        />
       ))}
     </Box>
   );
@@ -367,7 +403,10 @@ const ToolCallItem: React.FC<{
     description?: string;
   };
   compact?: boolean;
-}> = ({ toolCall, compact = false }) => {
+  config: Config;
+  childWidth: number;
+  nestLevel?: number;
+}> = ({ toolCall, compact = false, config, childWidth, nestLevel = 0 }) => {
   const STATUS_INDICATOR_WIDTH = 3;
 
   // Map subagent status to ToolCallStatus-like display
@@ -399,14 +438,35 @@ const ToolCallItem: React.FC<{
       : firstLine;
   }, [toolCall.description]);
 
-  // Get first line of resultDisplay for truncated output
+  // Try to parse nested subagent display from stringified JSON
+  const nestedTaskDisplay: TaskResultDisplay | null = React.useMemo(() => {
+    const raw = toolCall.resultDisplay;
+    if (!raw || typeof raw !== 'string') return null;
+    const trimmed = raw.trim();
+    if (!(trimmed.startsWith('{') && trimmed.includes('"type"'))) return null;
+    try {
+      const parsed = JSON.parse(trimmed) as unknown;
+      if (
+        parsed &&
+        typeof parsed === 'object' &&
+        (parsed as { type?: string }).type === 'task_execution'
+      ) {
+        return parsed as TaskResultDisplay;
+      }
+    } catch {
+      // ignore JSON parse errors, fall back to plain string output
+    }
+    return null;
+  }, [toolCall.resultDisplay]);
+
+  // Get first line of resultDisplay for truncated output when not nested
   const truncatedOutput = React.useMemo(() => {
-    if (!toolCall.resultDisplay) return '';
+    if (!toolCall.resultDisplay || nestedTaskDisplay) return '';
     const firstLine = toolCall.resultDisplay.split('\n')[0];
     return firstLine.length > 80
       ? firstLine.substring(0, 80) + '...'
       : firstLine;
-  }, [toolCall.resultDisplay]);
+  }, [toolCall.resultDisplay, nestedTaskDisplay]);
 
   return (
     <Box flexDirection="column" paddingLeft={1} marginBottom={0}>
@@ -422,10 +482,37 @@ const ToolCallItem: React.FC<{
         </Text>
       </Box>
 
-      {/* Second line: truncated returnDisplay output - hidden in compact mode */}
-      {!compact && truncatedOutput && (
-        <Box flexDirection="row" paddingLeft={STATUS_INDICATOR_WIDTH}>
-          <Text color={Colors.Gray}>{truncatedOutput}</Text>
+      {/* Second line: nested subagent UI or truncated returnDisplay */}
+      {!compact && (
+        <Box flexDirection="column" paddingLeft={STATUS_INDICATOR_WIDTH}>
+          {nestedTaskDisplay ? (
+            <Box flexDirection="column">
+              {/* Nested subagent heading */}
+              <Box>
+                <Text color={theme.text.primary}>
+                  {nestLevel > 0 ? '└─ ' : '┌─ '}Subagent: 
+                </Text>
+                <Text color={theme.text.accent}>
+                  {nestedTaskDisplay.subagentName}
+                </Text>
+                <Text> </Text>
+                <StatusBadge status={nestedTaskDisplay.status} />
+              </Box>
+              {/* Render nested agent execution display */}
+              <Box paddingLeft={2}>
+                <AgentExecutionDisplay
+                  data={nestedTaskDisplay}
+                  childWidth={Math.max(10, childWidth - STATUS_INDICATOR_WIDTH - 4)}
+                  config={config}
+                  nestLevel={nestLevel + 1}
+                />
+              </Box>
+            </Box>
+          ) : (
+            truncatedOutput && (
+              <Text color={Colors.Gray}>{truncatedOutput}</Text>
+            )
+          )}
         </Box>
       )}
     </Box>
@@ -508,11 +595,20 @@ const ToolUsageStats: React.FC<{
 const ResultsSection: React.FC<{
   data: TaskResultDisplay;
   displayMode: DisplayMode;
-}> = ({ data, displayMode }) => (
+  config: Config;
+  childWidth: number;
+  nestLevel: number;
+}> = ({ data, displayMode, config, childWidth, nestLevel }) => (
   <Box flexDirection="column" gap={1}>
     {/* Tool calls section - clean list format */}
     {data.toolCalls && data.toolCalls.length > 0 && (
-      <ToolCallsList toolCalls={data.toolCalls} displayMode={displayMode} />
+      <ToolCallsList
+        toolCalls={data.toolCalls}
+        displayMode={displayMode}
+        config={config}
+        childWidth={childWidth}
+        nestLevel={nestLevel}
+      />
     )}
 
     {/* Execution Summary section - hide when cancelled */}
@@ -549,3 +645,4 @@ const ResultsSection: React.FC<{
     )}
   </Box>
 );
+
